@@ -6,11 +6,13 @@ local SCALE=1 local screenResText="0x0"
 local function getScale() local vp=Camera.ViewportSize local diag=math.sqrt(vp.X*vp.X+vp.Y*vp.Y) local s=diag/(1920*1.4) if s<1 then s=1 end if s>3.5 then s=3.5 end screenResText=string.format("%dx%d",math.floor(vp.X),math.floor(vp.Y)) return s end
 SCALE=getScale() Camera:GetPropertyChangedSignal("ViewportSize"):Connect(function() SCALE=getScale() end)
 
--- Размеры UI под телефон
 local UI_SCALE = isMobile and 1.15 or 1.0
 local MENU_W = math.floor(280 * UI_SCALE)
 local MENU_H = math.floor(360 * UI_SCALE)
 local BTN_SIZE = isMobile and 60 or 50
+local TOP_H = isMobile and 50 or 42
+local CB_SIZE = isMobile and 40 or 30
+local TAB_W = isMobile and 80 or 72
 
 local Config={
     ESP={Enabled=false,Box=true,Name=false,Distance=false,Health=false,Tracer=false,Skeleton=false,Head=false,TeamCheck=true,MaxDistance=500},
@@ -142,6 +144,7 @@ local function updateESP()
     end
 end
 
+-- SILENT AIM (исправленный)
 local SilentTarget=nil
 
 local function getVisibleCheck(targetChar)
@@ -180,6 +183,7 @@ local function findSilentTarget()
     return closest
 end
 
+-- ХУК 1: Mouse.Hit / Mouse.Target
 local mt=getrawmetatable(game) setreadonly(mt,false)
 local oldIndex=mt.__index
 mt.__index=newcclosure(function(self,key)
@@ -193,6 +197,8 @@ mt.__index=newcclosure(function(self,key)
     end
     return oldIndex(self,key)
 end)
+
+-- ХУК 2: __namecall (RemoteEvent FireServer/InvokeServer)
 local oldNamecall=mt.__namecall
 mt.__namecall=newcclosure(function(self,...)
     local method=getnamecallmethod()
@@ -214,6 +220,7 @@ mt.__namecall=newcclosure(function(self,...)
 end)
 setreadonly(mt,true)
 
+-- ХУК 3: Camera:ViewportPointToRay
 local oldVPR=Camera.ViewportPointToRay
 Camera.ViewportPointToRay=newcclosure(function(self,x,y,depth)
     if not checkcaller() and Config.Silent.Enabled and SilentTarget then
@@ -225,6 +232,8 @@ Camera.ViewportPointToRay=newcclosure(function(self,x,y,depth)
     end
     return oldVPR(self,x,y,depth)
 end)
+
+-- ХУК 4: Camera:ScreenPointToRay
 local oldSPR=Camera.ScreenPointToRay
 Camera.ScreenPointToRay=newcclosure(function(self,x,y,depth)
     if not checkcaller() and Config.Silent.Enabled and SilentTarget then
@@ -245,31 +254,23 @@ createFOVCircle()
 
 local ScreenGui=Instance.new("ScreenGui") ScreenGui.Name="NeutronHub" ScreenGui.ResetOnSpawn=false ScreenGui.IgnoreGuiInset=true ScreenGui.DisplayOrder=999 ScreenGui.Parent=(gethui and gethui()) or LP:WaitForChild("PlayerGui")
 
--- Кнопка открытия (больше на телефоне)
 local ToggleBtn=Instance.new("ImageButton") ToggleBtn.Size=UDim2.new(0,BTN_SIZE,0,BTN_SIZE) ToggleBtn.Position=UDim2.new(0,12,0.4,0) ToggleBtn.BackgroundColor3=Color3.fromRGB(15,15,20) ToggleBtn.BorderSizePixel=0 ToggleBtn.Image=IMG ToggleBtn.ScaleType=Enum.ScaleType.Fit ToggleBtn.AutoButtonColor=false ToggleBtn.Active=true ToggleBtn.Parent=ScreenGui
 local tbc=Instance.new("UICorner") tbc.CornerRadius=UDim.new(1,0) tbc.Parent=ToggleBtn
 local tbs=Instance.new("UIStroke") tbs.Color=Color3.fromRGB(0,255,200) tbs.Thickness=2 tbs.Transparency=0.3 tbs.Parent=ToggleBtn
 
--- Меню (больше на телефоне)
 local Main=Instance.new("Frame") Main.Size=UDim2.new(0,MENU_W,0,MENU_H) Main.Position=UDim2.new(0.5,-MENU_W/2,0.5,-MENU_H/2) Main.BackgroundColor3=Color3.fromRGB(15,15,20) Main.BorderSizePixel=0 Main.Active=true Main.ClipsDescendants=true Main.Parent=ScreenGui
 local mc=Instance.new("UICorner") mc.CornerRadius=UDim.new(0,16) mc.Parent=Main
 local ms=Instance.new("UIStroke") ms.Color=Color3.fromRGB(0,255,200) ms.Thickness=1.5 ms.Transparency=0.4 ms.Parent=Main
 
--- Верхняя панель (выше для пальца)
-local TOP_H = isMobile and 50 or 42
 local TopBar=Instance.new("Frame") TopBar.Size=UDim2.new(1,0,0,TOP_H) TopBar.BackgroundColor3=Color3.fromRGB(22,22,30) TopBar.BorderSizePixel=0 TopBar.Active=true TopBar.Parent=Main
 local tc2=Instance.new("UICorner") tc2.CornerRadius=UDim.new(0,16) tc2.Parent=TopBar
 local tf=Instance.new("Frame") tf.Size=UDim2.new(1,0,0,16) tf.Position=UDim2.new(0,0,1,-16) tf.BackgroundColor3=Color3.fromRGB(22,22,30) tf.BorderSizePixel=0 tf.Parent=TopBar
 
 local Ttl=Instance.new("TextLabel") Ttl.Size=UDim2.new(1,-160,1,0) Ttl.Position=UDim2.new(0,48,0,0) Ttl.BackgroundTransparency=1 Ttl.Text="NEUTRON HUB" Ttl.TextColor3=Color3.fromRGB(0,255,200) Ttl.TextSize=isMobile and 16 or 15 Ttl.Font=Enum.Font.GothamBold Ttl.TextXAlignment=Enum.TextXAlignment.Left Ttl.Parent=TopBar
 
--- Кнопки X и - (больше на телефоне)
-local CB_SIZE = isMobile and 40 or 30
 local CB=Instance.new("TextButton") CB.Size=UDim2.new(0,CB_SIZE,0,CB_SIZE) CB.Position=UDim2.new(1,-CB_SIZE-8,0.5,-CB_SIZE/2) CB.BackgroundTransparency=1 CB.Text="X" CB.TextColor3=Color3.fromRGB(255,90,90) CB.TextSize=isMobile and 28 or 24 CB.Font=Enum.Font.GothamBold CB.AutoButtonColor=false CB.Parent=TopBar
 local MB=Instance.new("TextButton") MB.Size=UDim2.new(0,CB_SIZE,0,CB_SIZE) MB.Position=UDim2.new(1,-CB_SIZE*2-16,0.5,-CB_SIZE/2) MB.BackgroundTransparency=1 MB.Text="-" MB.TextColor3=Color3.fromRGB(200,200,200) MB.TextSize=isMobile and 28 or 24 MB.Font=Enum.Font.GothamBold MB.AutoButtonColor=false MB.Parent=TopBar
 
--- Вкладки (шире на телефоне)
-local TAB_W = isMobile and 80 or 72
 local TabsFrame=Instance.new("Frame") TabsFrame.Size=UDim2.new(0,TAB_W,1,-(TOP_H+8)) TabsFrame.Position=UDim2.new(0,6,0,TOP_H+4) TabsFrame.BackgroundColor3=Color3.fromRGB(18,18,24) TabsFrame.BorderSizePixel=0 TabsFrame.Parent=Main
 local tfc=Instance.new("UICorner") tfc.CornerRadius=UDim.new(0,10) tfc.Parent=TabsFrame
 local TL=Instance.new("UIListLayout") TL.Padding=UDim.new(0,5) TL.SortOrder=Enum.SortOrder.LayoutOrder TL.HorizontalAlignment=Enum.HorizontalAlignment.Center TL.Parent=TabsFrame
@@ -314,7 +315,6 @@ local function selTab(t)
 end
 V.B.MouseButton1Click:Connect(function() selTab(V) end) S.B.MouseButton1Click:Connect(function() selTab(S) end) MS.B.MouseButton1Click:Connect(function() selTab(MS) end) selTab(V)
 
--- Тумблеры (выше на телефоне)
 local function addTgl(parent,text,default,cb)
     local ROW_H = isMobile and 42 or 36
     local h=Instance.new("Frame") h.Size=UDim2.new(1,0,0,ROW_H) h.BackgroundColor3=Color3.fromRGB(22,22,30) h.BorderSizePixel=0 h.Parent=parent.P
@@ -341,7 +341,6 @@ local function addTgl(parent,text,default,cb)
     tg.MouseButton1Click:Connect(function() st=not st rf() if cb then cb(st) end end)
 end
 
--- Слайдеры (выше на телефоне)
 local function addSld(parent,text,mx,mn,df,cb)
     local ROW_H = isMobile and 58 or 50
     local h=Instance.new("Frame") h.Size=UDim2.new(1,0,0,ROW_H) h.BackgroundColor3=Color3.fromRGB(22,22,30) h.BorderSizePixel=0 h.Parent=parent.P
@@ -392,7 +391,7 @@ addTgl(V,"Head Circle",false,function(s) Config.ESP.Head=s end)
 addTgl(V,"Team Check",true,function(s) Config.ESP.TeamCheck=s end)
 addSld(V,"Max Distance",2000,50,500,function(v) Config.ESP.MaxDistance=v end)
 
-addTgl(S,"Aimbot Enabled",false,function(s)
+addTgl(S,"Silent Aim Enabled",false,function(s)
     Config.Silent.Enabled=s
     if FOVCircle then FOVCircle.Visible=s end
 end)
