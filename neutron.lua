@@ -25,18 +25,18 @@ Camera:GetPropertyChangedSignal("ViewportSize"):Connect(function() SCALE = getSc
 
 local Config = {
     ESP = {
-        Enabled = true,
+        Enabled = false,
         Box = true,
         Name = false,
         Distance = false,
         Health = false,
-        TeamCheck = false,
+        TeamCheck = true,
         MaxDistance = 500,
     },
     Silent = {
         Enabled = false,
         TargetPart = "Head",
-        TeamCheck = false,
+        TeamCheck = true,
         VisibleOnly = false,
         FOV = 150,
     },
@@ -58,7 +58,15 @@ end
 
 local function resolveTargetPart(char, name)
     if not char then return nil end
-    return char:FindFirstChild(name) or char:FindFirstChild("Head")
+    if name == "Head" then
+        return char:FindFirstChild("Head")
+    elseif name == "Torso" then
+        return char:FindFirstChild("UpperTorso")
+            or char:FindFirstChild("Torso")
+            or char:FindFirstChild("LowerTorso")
+            or char:FindFirstChild("HumanoidRootPart")
+    end
+    return char:FindFirstChild(name)
 end
 
 local function makeLine()
@@ -198,7 +206,6 @@ local function updateESP()
     end
 end
 
--- SILENT AIM
 local SilentTarget = nil
 
 local function getVisibleCheck(targetChar)
@@ -249,7 +256,6 @@ local function findSilentTarget()
     return closest
 end
 
--- HOOK
 local mt = getrawmetatable(game)
 setreadonly(mt, false)
 local oldIndex = mt.__index
@@ -276,7 +282,6 @@ local function createFOVCircle()
 end
 createFOVCircle()
 
--- UI
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "NeutronDD"
 ScreenGui.ResetOnSpawn = false
@@ -671,25 +676,25 @@ local function addDd(parent, text, opts, cb)
     end
 end
 
-addTgl(V, "ESP Enabled", true, function(s) Config.ESP.Enabled = s end)
+addTgl(V, "ESP Enabled", false, function(s) Config.ESP.Enabled = s end)
 addTgl(V, "Box", true, function(s) Config.ESP.Box = s end)
 addTgl(V, "Name", false, function(s) Config.ESP.Name = s end)
 addTgl(V, "Distance", false, function(s) Config.ESP.Distance = s end)
 addTgl(V, "Health Bar", false, function(s) Config.ESP.Health = s end)
-addTgl(V, "Team Check", false, function(s) Config.ESP.TeamCheck = s end)
+addTgl(V, "Team Check", true, function(s) Config.ESP.TeamCheck = s end)
 addSld(V, "Max Distance", 2000, 50, 500, function(v) Config.ESP.MaxDistance = v end)
 
 addTgl(S, "Silent Aim Enabled", false, function(s)
     Config.Silent.Enabled = s
     if FOVCircle then FOVCircle.Visible = s end
 end)
-addTgl(S, "Team Check", false, function(s) Config.Silent.TeamCheck = s end)
+addTgl(S, "Team Check", true, function(s) Config.Silent.TeamCheck = s end)
 addTgl(S, "Visible Only", false, function(s) Config.Silent.VisibleOnly = s end)
-addSld(S, "FOV", 360, 30, 150, function(v)
+addSld(S, "FOV", 180, 30, 150, function(v)
     Config.Silent.FOV = v
     if FOVCircle then FOVCircle.Radius = v end
 end)
-addDd(S, "Target Part", {"Head", "HumanoidRootPart", "Torso"}, function(v) Config.Silent.TargetPart = v end)
+addDd(S, "Target Part", {"Head", "Torso"}, function(v) Config.Silent.TargetPart = v end)
 
 local TgHolder = Instance.new("Frame")
 TgHolder.Size = UDim2.new(1, 0, 0, 96)
