@@ -1,4 +1,4 @@
--- NEUTRON HUB | Deagle Duels
+-- NEUTRON HUB | Rivals
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -47,7 +47,6 @@ local FOVCircle = nil
 local Open = true
 local CompletelyClosed = false
 
--- TEAM CHECK
 local function isTeammate(player)
     if not player or player == LocalPlayer then return true end
     local myTeam = LocalPlayer.Team
@@ -70,7 +69,6 @@ local function resolveTargetPart(char, name)
     return char:FindFirstChild(name)
 end
 
--- ESP
 local function makeLine()
     local l = Drawing.new("Line")
     l.Thickness = math.max(1, math.floor(1.5 * SCALE))
@@ -210,7 +208,6 @@ end
 
 -- SILENT AIM
 local SilentTarget = nil
-local SilentTargetPos = nil
 
 local function getVisibleCheck(targetChar)
     if not Config.Silent.VisibleOnly then return true end
@@ -238,7 +235,6 @@ end
 
 local function findSilentTarget()
     local closest, shortest = nil, math.huge
-    local closestPos = nil
     local center = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
     for _, p in pairs(Players:GetPlayers()) do
         if p == LocalPlayer then continue end
@@ -256,19 +252,18 @@ local function findSilentTarget()
         if d < shortest and d <= Config.Silent.FOV then
             shortest = d
             closest = part
-            closestPos = part.Position
         end
     end
-    return closest, closestPos
+    return closest
 end
 
--- ХУК 1: Mouse.Hit / Mouse.Target (для игр, использующих Mouse)
+-- ХУКИ
 local mt = getrawmetatable(game)
 setreadonly(mt, false)
 local oldIndex = mt.__index
 mt.__index = newcclosure(function(self, key)
-    if not checkcaller() and Config.Silent.Enabled then
-        if self == Mouse and (key == "Hit" or key == "Target") then
+    if not checkcaller() and Config.Silent.Enabled and self == Mouse then
+        if key == "Hit" or key == "Target" then
             if SilentTarget then
                 if key == "Hit" then
                     return CFrame.new(SilentTarget.Position)
@@ -282,34 +277,6 @@ mt.__index = newcclosure(function(self, key)
 end)
 setreadonly(mt, true)
 
--- ХУК 2: Camera:ViewportPointToRay / ScreenPointToRay (для FPS-игр типа Deagle Duels)
-local oldViewportPointToRay = Camera.ViewportPointToRay
-Camera.ViewportPointToRay = newcclosure(function(self, x, y, depth)
-    if not checkcaller() and Config.Silent.Enabled and SilentTarget then
-        local centerX = Camera.ViewportSize.X / 2
-        local centerY = Camera.ViewportSize.Y / 2
-        if math.abs(x - centerX) < 5 and math.abs(y - centerY) < 5 then
-            local dir = (SilentTarget.Position - Camera.CFrame.Position).Unit
-            return Ray.new(Camera.CFrame.Position, dir * (depth or 1000))
-        end
-    end
-    return oldViewportPointToRay(self, x, y, depth)
-end)
-
-local oldScreenPointToRay = Camera.ScreenPointToRay
-Camera.ScreenPointToRay = newcclosure(function(self, x, y, depth)
-    if not checkcaller() and Config.Silent.Enabled and SilentTarget then
-        local centerX = Camera.ViewportSize.X / 2
-        local centerY = Camera.ViewportSize.Y / 2
-        if math.abs(x - centerX) < 5 and math.abs(y - centerY) < 5 then
-            local dir = (SilentTarget.Position - Camera.CFrame.Position).Unit
-            return Ray.new(Camera.CFrame.Position, dir * (depth or 1000))
-        end
-    end
-    return oldScreenPointToRay(self, x, y, depth)
-end)
-
--- FOV Circle
 local function createFOVCircle()
     if FOVCircle then FOVCircle:Remove() end
     FOVCircle = Drawing.new("Circle")
@@ -515,7 +482,7 @@ local function mkTab(n)
 end
 
 local V = mkTab("ESP")
-local S = mkTab("SILENT")
+local S = mkTab("SILENT AIM")
 local MS = mkTab("MISC")
 local Tabs = {V, S, MS}
 
@@ -668,56 +635,7 @@ local function addSld(parent, text, mx, mn, df, cb)
     end)
 end
 
-local function addDd(parent, text, opts, cb)
-    local h = Instance.new("Frame")
-    h.Size = UDim2.new(1,0,0,34)
-    h.BackgroundColor3 = Color3.fromRGB(22,22,30)
-    h.BorderSizePixel = 0
-    h.ClipsDescendants = true
-    h.Parent = parent.P
-    local hc = Instance.new("UICorner")
-    hc.CornerRadius = UDim.new(0,8)
-    hc.Parent = h
-    local b = Instance.new("TextButton")
-    b.Size = UDim2.new(1,0,0,34)
-    b.BackgroundTransparency = 1
-    b.Text = text .. ": " .. opts[1]
-    b.TextColor3 = Color3.fromRGB(220,220,220)
-    b.TextSize = 12
-    b.Font = Enum.Font.Gotham
-    b.TextXAlignment = Enum.TextXAlignment.Left
-    b.Parent = h
-    local pd = Instance.new("UIPadding")
-    pd.PaddingLeft = UDim.new(0,10)
-    pd.Parent = b
-    local op = false
-    b.MouseButton1Click:Connect(function()
-        op = not op
-        h.Size = op and UDim2.new(1,0,0,34 + #opts*26) or UDim2.new(1,0,0,34)
-    end)
-    for i, o in ipairs(opts) do
-        local ob = Instance.new("TextButton")
-        ob.Size = UDim2.new(1,-10,0,24)
-        ob.Position = UDim2.new(0,5,0,34 + (i-1)*26)
-        ob.BackgroundColor3 = Color3.fromRGB(30,30,40)
-        ob.BorderSizePixel = 0
-        ob.Text = o
-        ob.TextColor3 = Color3.fromRGB(200,200,200)
-        ob.TextSize = 11
-        ob.Font = Enum.Font.Gotham
-        ob.Parent = h
-        local oc = Instance.new("UICorner")
-        oc.CornerRadius = UDim.new(0,6)
-        oc.Parent = ob
-        ob.MouseButton1Click:Connect(function()
-            b.Text = text .. ": " .. o
-            op = false
-            h.Size = UDim2.new(1,0,0,34)
-            if cb then cb(o) end
-        end)
-    end
-end
-
+-- ESP tab
 addTgl(V, "ESP Enabled", false, function(s) Config.ESP.Enabled = s end)
 addTgl(V, "Box", true, function(s) Config.ESP.Box = s end)
 addTgl(V, "Name", false, function(s) Config.ESP.Name = s end)
@@ -726,17 +644,11 @@ addTgl(V, "Health Bar", false, function(s) Config.ESP.Health = s end)
 addTgl(V, "Team Check", true, function(s) Config.ESP.TeamCheck = s end)
 addSld(V, "Max Distance", 2000, 50, 500, function(v) Config.ESP.MaxDistance = v end)
 
+-- SILENT AIM tab (только один переключатель)
 addTgl(S, "Silent Aim Enabled", false, function(s)
     Config.Silent.Enabled = s
     if FOVCircle then FOVCircle.Visible = s end
 end)
-addTgl(S, "Team Check", true, function(s) Config.Silent.TeamCheck = s end)
-addTgl(S, "Visible Only", false, function(s) Config.Silent.VisibleOnly = s end)
-addSld(S, "FOV", 180, 30, 150, function(v)
-    Config.Silent.FOV = v
-    if FOVCircle then FOVCircle.Radius = v end
-end)
-addDd(S, "Target Part", {"Head", "Torso"}, function(v) Config.Silent.TargetPart = v end)
 
 local TgHolder = Instance.new("Frame")
 TgHolder.Size = UDim2.new(1, 0, 0, 96)
@@ -868,10 +780,9 @@ Players.PlayerRemoving:Connect(removeESP)
 RunService.RenderStepped:Connect(function()
     if CompletelyClosed then return end
     if Config.Silent.Enabled then
-        SilentTarget, SilentTargetPos = findSilentTarget()
+        SilentTarget = findSilentTarget()
     else
         SilentTarget = nil
-        SilentTargetPos = nil
     end
     updateESP()
     if FOVCircle and FOVCircle.Visible then
