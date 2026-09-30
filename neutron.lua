@@ -1,9 +1,16 @@
--- NEUTRON HUB | Rivals
+-- NEUTRON HUB | Mobile
 local Players=game:GetService("Players")local RunService=game:GetService("RunService")local UIS=game:GetService("UserInputService")local WS=game:GetService("Workspace")local TweenService=game:GetService("TweenService")local Stats=game:GetService("Stats")local Camera=WS.CurrentCamera local LP=Players.LocalPlayer local Mouse=LP:GetMouse()
+local isMobile=UIS.TouchEnabled
 local IMG="rbxassetid://138823883244540" local TG_LINK="t.me/neutron_client"
 local SCALE=1 local screenResText="0x0"
 local function getScale() local vp=Camera.ViewportSize local diag=math.sqrt(vp.X*vp.X+vp.Y*vp.Y) local s=diag/(1920*1.4) if s<1 then s=1 end if s>3.5 then s=3.5 end screenResText=string.format("%dx%d",math.floor(vp.X),math.floor(vp.Y)) return s end
 SCALE=getScale() Camera:GetPropertyChangedSignal("ViewportSize"):Connect(function() SCALE=getScale() end)
+
+-- Размеры UI под телефон
+local UI_SCALE = isMobile and 1.15 or 1.0
+local MENU_W = math.floor(280 * UI_SCALE)
+local MENU_H = math.floor(360 * UI_SCALE)
+local BTN_SIZE = isMobile and 60 or 50
 
 local Config={
     ESP={Enabled=false,Box=true,Name=false,Distance=false,Health=false,Tracer=false,Skeleton=false,Head=false,TeamCheck=true,MaxDistance=500},
@@ -135,7 +142,6 @@ local function updateESP()
     end
 end
 
--- SILENT AIM
 local SilentTarget=nil
 
 local function getVisibleCheck(targetChar)
@@ -174,7 +180,6 @@ local function findSilentTarget()
     return closest
 end
 
--- ХУКИ
 local mt=getrawmetatable(game) setreadonly(mt,false)
 local oldIndex=mt.__index
 mt.__index=newcclosure(function(self,key)
@@ -188,7 +193,6 @@ mt.__index=newcclosure(function(self,key)
     end
     return oldIndex(self,key)
 end)
-
 local oldNamecall=mt.__namecall
 mt.__namecall=newcclosure(function(self,...)
     local method=getnamecallmethod()
@@ -239,54 +243,66 @@ local function createFOVCircle()
 end
 createFOVCircle()
 
--- UI
 local ScreenGui=Instance.new("ScreenGui") ScreenGui.Name="NeutronHub" ScreenGui.ResetOnSpawn=false ScreenGui.IgnoreGuiInset=true ScreenGui.DisplayOrder=999 ScreenGui.Parent=(gethui and gethui()) or LP:WaitForChild("PlayerGui")
 
-local ToggleBtn=Instance.new("ImageButton") ToggleBtn.Size=UDim2.new(0,46,0,46) ToggleBtn.Position=UDim2.new(0,12,0.4,0) ToggleBtn.BackgroundColor3=Color3.fromRGB(15,15,20) ToggleBtn.BorderSizePixel=0 ToggleBtn.Image=IMG ToggleBtn.ScaleType=Enum.ScaleType.Fit ToggleBtn.AutoButtonColor=false ToggleBtn.Active=true ToggleBtn.Parent=ScreenGui
+-- Кнопка открытия (больше на телефоне)
+local ToggleBtn=Instance.new("ImageButton") ToggleBtn.Size=UDim2.new(0,BTN_SIZE,0,BTN_SIZE) ToggleBtn.Position=UDim2.new(0,12,0.4,0) ToggleBtn.BackgroundColor3=Color3.fromRGB(15,15,20) ToggleBtn.BorderSizePixel=0 ToggleBtn.Image=IMG ToggleBtn.ScaleType=Enum.ScaleType.Fit ToggleBtn.AutoButtonColor=false ToggleBtn.Active=true ToggleBtn.Parent=ScreenGui
 local tbc=Instance.new("UICorner") tbc.CornerRadius=UDim.new(1,0) tbc.Parent=ToggleBtn
-local tbs=Instance.new("UIStroke") tbs.Color=Color3.fromRGB(0,255,200) tbs.Thickness=1.5 tbs.Transparency=0.3 tbs.Parent=ToggleBtn
+local tbs=Instance.new("UIStroke") tbs.Color=Color3.fromRGB(0,255,200) tbs.Thickness=2 tbs.Transparency=0.3 tbs.Parent=ToggleBtn
 
-local Main=Instance.new("Frame") Main.Size=UDim2.new(0,260,0,330) Main.Position=UDim2.new(0.5,-130,0.5,-165) Main.BackgroundColor3=Color3.fromRGB(15,15,20) Main.BorderSizePixel=0 Main.Active=true Main.ClipsDescendants=true Main.Parent=ScreenGui
-local mc=Instance.new("UICorner") mc.CornerRadius=UDim.new(0,14) mc.Parent=Main
+-- Меню (больше на телефоне)
+local Main=Instance.new("Frame") Main.Size=UDim2.new(0,MENU_W,0,MENU_H) Main.Position=UDim2.new(0.5,-MENU_W/2,0.5,-MENU_H/2) Main.BackgroundColor3=Color3.fromRGB(15,15,20) Main.BorderSizePixel=0 Main.Active=true Main.ClipsDescendants=true Main.Parent=ScreenGui
+local mc=Instance.new("UICorner") mc.CornerRadius=UDim.new(0,16) mc.Parent=Main
 local ms=Instance.new("UIStroke") ms.Color=Color3.fromRGB(0,255,200) ms.Thickness=1.5 ms.Transparency=0.4 ms.Parent=Main
 
-local TopBar=Instance.new("Frame") TopBar.Size=UDim2.new(1,0,0,42) TopBar.BackgroundColor3=Color3.fromRGB(22,22,30) TopBar.BorderSizePixel=0 TopBar.Active=true TopBar.Parent=Main
-local tc2=Instance.new("UICorner") tc2.CornerRadius=UDim.new(0,14) tc2.Parent=TopBar
-local tf=Instance.new("Frame") tf.Size=UDim2.new(1,0,0,14) tf.Position=UDim2.new(0,0,1,-14) tf.BackgroundColor3=Color3.fromRGB(22,22,30) tf.BorderSizePixel=0 tf.Parent=TopBar
+-- Верхняя панель (выше для пальца)
+local TOP_H = isMobile and 50 or 42
+local TopBar=Instance.new("Frame") TopBar.Size=UDim2.new(1,0,0,TOP_H) TopBar.BackgroundColor3=Color3.fromRGB(22,22,30) TopBar.BorderSizePixel=0 TopBar.Active=true TopBar.Parent=Main
+local tc2=Instance.new("UICorner") tc2.CornerRadius=UDim.new(0,16) tc2.Parent=TopBar
+local tf=Instance.new("Frame") tf.Size=UDim2.new(1,0,0,16) tf.Position=UDim2.new(0,0,1,-16) tf.BackgroundColor3=Color3.fromRGB(22,22,30) tf.BorderSizePixel=0 tf.Parent=TopBar
 
-local Ttl=Instance.new("TextLabel") Ttl.Size=UDim2.new(1,-160,1,0) Ttl.Position=UDim2.new(0,42,0,0) Ttl.BackgroundTransparency=1 Ttl.Text="NEUTRON HUB" Ttl.TextColor3=Color3.fromRGB(0,255,200) Ttl.TextSize=15 Ttl.Font=Enum.Font.GothamBold Ttl.TextXAlignment=Enum.TextXAlignment.Left Ttl.Parent=TopBar
+local Ttl=Instance.new("TextLabel") Ttl.Size=UDim2.new(1,-160,1,0) Ttl.Position=UDim2.new(0,48,0,0) Ttl.BackgroundTransparency=1 Ttl.Text="NEUTRON HUB" Ttl.TextColor3=Color3.fromRGB(0,255,200) Ttl.TextSize=isMobile and 16 or 15 Ttl.Font=Enum.Font.GothamBold Ttl.TextXAlignment=Enum.TextXAlignment.Left Ttl.Parent=TopBar
 
-local CB=Instance.new("TextButton") CB.Size=UDim2.new(0,30,0,30) CB.Position=UDim2.new(1,-36,0.5,-15) CB.BackgroundTransparency=1 CB.Text="X" CB.TextColor3=Color3.fromRGB(255,90,90) CB.TextSize=24 CB.Font=Enum.Font.GothamBold CB.AutoButtonColor=false CB.Parent=TopBar
-local MB=Instance.new("TextButton") MB.Size=UDim2.new(0,30,0,30) MB.Position=UDim2.new(1,-84,0.5,-15) MB.BackgroundTransparency=1 MB.Text="-" MB.TextColor3=Color3.fromRGB(200,200,200) MB.TextSize=24 MB.Font=Enum.Font.GothamBold MB.AutoButtonColor=false MB.Parent=TopBar
+-- Кнопки X и - (больше на телефоне)
+local CB_SIZE = isMobile and 40 or 30
+local CB=Instance.new("TextButton") CB.Size=UDim2.new(0,CB_SIZE,0,CB_SIZE) CB.Position=UDim2.new(1,-CB_SIZE-8,0.5,-CB_SIZE/2) CB.BackgroundTransparency=1 CB.Text="X" CB.TextColor3=Color3.fromRGB(255,90,90) CB.TextSize=isMobile and 28 or 24 CB.Font=Enum.Font.GothamBold CB.AutoButtonColor=false CB.Parent=TopBar
+local MB=Instance.new("TextButton") MB.Size=UDim2.new(0,CB_SIZE,0,CB_SIZE) MB.Position=UDim2.new(1,-CB_SIZE*2-16,0.5,-CB_SIZE/2) MB.BackgroundTransparency=1 MB.Text="-" MB.TextColor3=Color3.fromRGB(200,200,200) MB.TextSize=isMobile and 28 or 24 MB.Font=Enum.Font.GothamBold MB.AutoButtonColor=false MB.Parent=TopBar
 
-local TabsFrame=Instance.new("Frame") TabsFrame.Size=UDim2.new(0,72,1,-50) TabsFrame.Position=UDim2.new(0,6,0,46) TabsFrame.BackgroundColor3=Color3.fromRGB(18,18,24) TabsFrame.BorderSizePixel=0 TabsFrame.Parent=Main
+-- Вкладки (шире на телефоне)
+local TAB_W = isMobile and 80 or 72
+local TabsFrame=Instance.new("Frame") TabsFrame.Size=UDim2.new(0,TAB_W,1,-(TOP_H+8)) TabsFrame.Position=UDim2.new(0,6,0,TOP_H+4) TabsFrame.BackgroundColor3=Color3.fromRGB(18,18,24) TabsFrame.BorderSizePixel=0 TabsFrame.Parent=Main
 local tfc=Instance.new("UICorner") tfc.CornerRadius=UDim.new(0,10) tfc.Parent=TabsFrame
-local TL=Instance.new("UIListLayout") TL.Padding=UDim.new(0,4) TL.SortOrder=Enum.SortOrder.LayoutOrder TL.HorizontalAlignment=Enum.HorizontalAlignment.Center TL.Parent=TabsFrame
+local TL=Instance.new("UIListLayout") TL.Padding=UDim.new(0,5) TL.SortOrder=Enum.SortOrder.LayoutOrder TL.HorizontalAlignment=Enum.HorizontalAlignment.Center TL.Parent=TabsFrame
 local TPD=Instance.new("UIPadding") TPD.PaddingTop=UDim.new(0,8) TPD.Parent=TabsFrame
 
-local Content=Instance.new("Frame") Content.Size=UDim2.new(1,-88,1,-50) Content.Position=UDim2.new(0,82,0,46) Content.BackgroundTransparency=1 Content.ClipsDescendants=true Content.Parent=Main
+local Content=Instance.new("Frame") Content.Size=UDim2.new(1,-TAB_W-16,1,-(TOP_H+8)) Content.Position=UDim2.new(0,TAB_W+10,0,TOP_H+4) Content.BackgroundTransparency=1 Content.ClipsDescendants=true Content.Parent=Main
 
 local bDr=false local bDS=nil local bSP=nil local bMv=false
-local function bUpd(i) local d=i.Position-bDS if math.abs(d.X)>5 or math.abs(d.Y)>5 then bMv=true end ToggleBtn.Position=UDim2.new(bSP.X.Scale,bSP.X.Offset+d.X,bSP.Y.Scale,bSP.Y.Offset+d.Y) end
+local function bUpd(i) local d=i.Position-bDS if math.abs(d.X)>8 or math.abs(d.Y)>8 then bMv=true end ToggleBtn.Position=UDim2.new(bSP.X.Scale,bSP.X.Offset+d.X,bSP.Y.Scale,bSP.Y.Offset+d.Y) end
 ToggleBtn.InputBegan:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then bDr=true bMv=false bDS=i.Position bSP=ToggleBtn.Position end end)
+ToggleBtn.InputChanged:Connect(function(i) if bDr and (i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch) then bUpd(i) end end)
+ToggleBtn.InputEnded:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then bDr=false end end)
 UIS.InputChanged:Connect(function(i) if bDr and (i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch) then bUpd(i) end end)
 UIS.InputEnded:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then bDr=false end end)
 
 local mDr=false local mDS=nil local mSP=nil
+local function mUpd(i) local d=i.Position-mDS Main.Position=UDim2.new(mSP.X.Scale,mSP.X.Offset+d.X,mSP.Y.Scale,mSP.Y.Offset+d.Y) end
 TopBar.InputBegan:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then mDr=true mDS=i.Position mSP=Main.Position end end)
-UIS.InputChanged:Connect(function(i) if mDr and (i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch) then local d=i.Position-mDS Main.Position=UDim2.new(mSP.X.Scale,mSP.X.Offset+d.X,mSP.Y.Scale,mSP.Y.Offset+d.Y) end end)
+TopBar.InputChanged:Connect(function(i) if mDr and (i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch) then mUpd(i) end end)
+TopBar.InputEnded:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then mDr=false end end)
+UIS.InputChanged:Connect(function(i) if mDr and (i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch) then mUpd(i) end end)
 UIS.InputEnded:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then mDr=false end end)
 
 local function mkTab(n)
-    local b=Instance.new("TextButton") b.Size=UDim2.new(1,-10,0,34) b.BackgroundColor3=Color3.fromRGB(25,25,33) b.BorderSizePixel=0 b.Text=n b.TextColor3=Color3.fromRGB(200,200,200) b.TextSize=13 b.Font=Enum.Font.GothamBold b.AutoButtonColor=false b.Parent=TabsFrame
+    local b=Instance.new("TextButton") b.Size=UDim2.new(1,-12,0,isMobile and 42 or 38) b.BackgroundColor3=Color3.fromRGB(25,25,33) b.BorderSizePixel=0 b.Text=n b.TextColor3=Color3.fromRGB(200,200,200) b.TextSize=isMobile and 13 or 12 b.Font=Enum.Font.GothamBold b.AutoButtonColor=false b.Parent=TabsFrame
     local c=Instance.new("UICorner") c.CornerRadius=UDim.new(0,8) c.Parent=b
-    local pg=Instance.new("ScrollingFrame") pg.Size=UDim2.new(1,0,1,0) pg.BackgroundTransparency=1 pg.BorderSizePixel=0 pg.ScrollBarThickness=3 pg.ScrollBarImageColor3=Color3.fromRGB(0,255,200) pg.CanvasSize=UDim2.new(0,0,0,0) pg.AutomaticCanvasSize=Enum.AutomaticSize.Y pg.Visible=false pg.Parent=Content
-    local l=Instance.new("UIListLayout") l.Padding=UDim.new(0,5) l.SortOrder=Enum.SortOrder.LayoutOrder l.Parent=pg
-    local pd=Instance.new("UIPadding") pd.PaddingTop=UDim.new(0,4) pd.PaddingRight=UDim.new(0,6) pd.PaddingBottom=UDim.new(0,4) pd.Parent=pg
+    local pg=Instance.new("ScrollingFrame") pg.Size=UDim2.new(1,0,1,0) pg.BackgroundTransparency=1 pg.BorderSizePixel=0 pg.ScrollBarThickness=4 pg.ScrollBarImageColor3=Color3.fromRGB(0,255,200) pg.CanvasSize=UDim2.new(0,0,0,0) pg.AutomaticCanvasSize=Enum.AutomaticSize.Y pg.Visible=false pg.Parent=Content
+    local l=Instance.new("UIListLayout") l.Padding=UDim.new(0,6) l.SortOrder=Enum.SortOrder.LayoutOrder l.Parent=pg
+    local pd=Instance.new("UIPadding") pd.PaddingTop=UDim.new(0,4) pd.PaddingRight=UDim.new(0,8) pd.PaddingBottom=UDim.new(0,4) pd.Parent=pg
     return {B=b,P=pg}
 end
 
-local V=mkTab("ESP") local S=mkTab("SILENT AIM") local MS=mkTab("MISC") local Tabs={V,S,MS}
+local V=mkTab("ESP") local S=mkTab("AIM") local MS=mkTab("MISC") local Tabs={V,S,MS}
 
 local function selTab(t)
     for _,x in pairs(Tabs) do
@@ -298,34 +314,42 @@ local function selTab(t)
 end
 V.B.MouseButton1Click:Connect(function() selTab(V) end) S.B.MouseButton1Click:Connect(function() selTab(S) end) MS.B.MouseButton1Click:Connect(function() selTab(MS) end) selTab(V)
 
+-- Тумблеры (выше на телефоне)
 local function addTgl(parent,text,default,cb)
-    local h=Instance.new("Frame") h.Size=UDim2.new(1,0,0,34) h.BackgroundColor3=Color3.fromRGB(22,22,30) h.BorderSizePixel=0 h.Parent=parent.P
+    local ROW_H = isMobile and 42 or 36
+    local h=Instance.new("Frame") h.Size=UDim2.new(1,0,0,ROW_H) h.BackgroundColor3=Color3.fromRGB(22,22,30) h.BorderSizePixel=0 h.Parent=parent.P
     local hc=Instance.new("UICorner") hc.CornerRadius=UDim.new(0,8) hc.Parent=h
-    local l=Instance.new("TextLabel") l.Size=UDim2.new(1,-60,1,0) l.Position=UDim2.new(0,10,0,0) l.BackgroundTransparency=1 l.Text=text l.TextColor3=Color3.fromRGB(220,220,220) l.TextSize=12 l.Font=Enum.Font.Gotham l.TextXAlignment=Enum.TextXAlignment.Left l.Parent=h
-    local tg=Instance.new("TextButton") tg.Size=UDim2.new(0,40,0,20) tg.Position=UDim2.new(1,-50,0.5,-10) tg.BackgroundColor3=Color3.fromRGB(40,40,50) tg.BorderSizePixel=0 tg.Text="" tg.AutoButtonColor=false tg.Parent=h
+    local l=Instance.new("TextLabel") l.Size=UDim2.new(1,-70,1,0) l.Position=UDim2.new(0,12,0,0) l.BackgroundTransparency=1 l.Text=text l.TextColor3=Color3.fromRGB(220,220,220) l.TextSize=isMobile and 13 or 12 l.Font=Enum.Font.Gotham l.TextXAlignment=Enum.TextXAlignment.Left l.Parent=h
+    local SW_W = isMobile and 46 or 42
+    local SW_H = isMobile and 24 or 22
+    local tg=Instance.new("TextButton") tg.Size=UDim2.new(0,SW_W,0,SW_H) tg.Position=UDim2.new(1,-SW_W-10,0.5,-SW_H/2) tg.BackgroundColor3=Color3.fromRGB(40,40,50) tg.BorderSizePixel=0 tg.Text="" tg.AutoButtonColor=false tg.Parent=h
     local tc=Instance.new("UICorner") tc.CornerRadius=UDim.new(1,0) tc.Parent=tg
-    local k=Instance.new("Frame") k.Size=UDim2.new(0,16,0,16) k.Position=UDim2.new(0,2,0.5,-8) k.BackgroundColor3=Color3.fromRGB(200,200,200) k.BorderSizePixel=0 k.Parent=tg
+    local K_SIZE = isMobile and 18 or 16
+    local k=Instance.new("Frame") k.Size=UDim2.new(0,K_SIZE,0,K_SIZE) k.Position=UDim2.new(0,3,0.5,-K_SIZE/2) k.BackgroundColor3=Color3.fromRGB(200,200,200) k.BorderSizePixel=0 k.Parent=tg
     local kc=Instance.new("UICorner") kc.CornerRadius=UDim.new(1,0) kc.Parent=k
     local st=default or false
     local function rf()
         if st then
             TweenService:Create(tg,TweenInfo.new(0.15),{BackgroundColor3=Color3.fromRGB(0,255,200)}):Play()
-            TweenService:Create(k,TweenInfo.new(0.15),{Position=UDim2.new(1,-18,0.5,-8),BackgroundColor3=Color3.fromRGB(15,15,20)}):Play()
+            TweenService:Create(k,TweenInfo.new(0.15),{Position=UDim2.new(1,-K_SIZE-3,0.5,-K_SIZE/2),BackgroundColor3=Color3.fromRGB(15,15,20)}):Play()
         else
             TweenService:Create(tg,TweenInfo.new(0.15),{BackgroundColor3=Color3.fromRGB(40,40,50)}):Play()
-            TweenService:Create(k,TweenInfo.new(0.15),{Position=UDim2.new(0,2,0.5,-8),BackgroundColor3=Color3.fromRGB(200,200,200)}):Play()
+            TweenService:Create(k,TweenInfo.new(0.15),{Position=UDim2.new(0,3,0.5,-K_SIZE/2),BackgroundColor3=Color3.fromRGB(200,200,200)}):Play()
         end
     end
     rf()
     tg.MouseButton1Click:Connect(function() st=not st rf() if cb then cb(st) end end)
 end
 
+-- Слайдеры (выше на телефоне)
 local function addSld(parent,text,mx,mn,df,cb)
-    local h=Instance.new("Frame") h.Size=UDim2.new(1,0,0,48) h.BackgroundColor3=Color3.fromRGB(22,22,30) h.BorderSizePixel=0 h.Parent=parent.P
+    local ROW_H = isMobile and 58 or 50
+    local h=Instance.new("Frame") h.Size=UDim2.new(1,0,0,ROW_H) h.BackgroundColor3=Color3.fromRGB(22,22,30) h.BorderSizePixel=0 h.Parent=parent.P
     local hc=Instance.new("UICorner") hc.CornerRadius=UDim.new(0,8) hc.Parent=h
-    local l=Instance.new("TextLabel") l.Size=UDim2.new(1,-60,0,20) l.Position=UDim2.new(0,10,0,4) l.BackgroundTransparency=1 l.Text=text l.TextColor3=Color3.fromRGB(220,220,220) l.TextSize=12 l.Font=Enum.Font.Gotham l.TextXAlignment=Enum.TextXAlignment.Left l.Parent=h
-    local vl=Instance.new("TextLabel") vl.Size=UDim2.new(0,50,0,20) vl.Position=UDim2.new(1,-56,0,4) vl.BackgroundTransparency=1 vl.Text=tostring(df) vl.TextColor3=Color3.fromRGB(0,255,200) vl.TextSize=12 vl.Font=Enum.Font.GothamBold vl.TextXAlignment=Enum.TextXAlignment.Right vl.Parent=h
-    local b=Instance.new("Frame") b.Size=UDim2.new(1,-20,0,6) b.Position=UDim2.new(0,10,0,30) b.BackgroundColor3=Color3.fromRGB(40,40,50) b.BorderSizePixel=0 b.Parent=h
+    local l=Instance.new("TextLabel") l.Size=UDim2.new(1,-70,0,22) l.Position=UDim2.new(0,12,0,6) l.BackgroundTransparency=1 l.Text=text l.TextColor3=Color3.fromRGB(220,220,220) l.TextSize=isMobile and 13 or 12 l.Font=Enum.Font.Gotham l.TextXAlignment=Enum.TextXAlignment.Left l.Parent=h
+    local vl=Instance.new("TextLabel") vl.Size=UDim2.new(0,55,0,22) vl.Position=UDim2.new(1,-65,0,6) vl.BackgroundTransparency=1 vl.Text=tostring(df) vl.TextColor3=Color3.fromRGB(0,255,200) vl.TextSize=isMobile and 13 or 12 vl.Font=Enum.Font.GothamBold vl.TextXAlignment=Enum.TextXAlignment.Right vl.Parent=h
+    local BAR_H = isMobile and 8 or 6
+    local b=Instance.new("Frame") b.Size=UDim2.new(1,-24,0,BAR_H) b.Position=UDim2.new(0,12,0,ROW_H-16) b.BackgroundColor3=Color3.fromRGB(40,40,50) b.BorderSizePixel=0 b.Parent=h
     local bc=Instance.new("UICorner") bc.CornerRadius=UDim.new(1,0) bc.Parent=b
     local f=Instance.new("Frame") f.Size=UDim2.new((df-mn)/(mx-mn),0,1,0) f.BackgroundColor3=Color3.fromRGB(0,255,200) f.BorderSizePixel=0 f.Parent=b
     local fc=Instance.new("UICorner") fc.CornerRadius=UDim.new(1,0) fc.Parent=f
@@ -342,20 +366,21 @@ local function addSld(parent,text,mx,mn,df,cb)
 end
 
 local function addDd(parent,text,opts,cb)
-    local h=Instance.new("Frame") h.Size=UDim2.new(1,0,0,34) h.BackgroundColor3=Color3.fromRGB(22,22,30) h.BorderSizePixel=0 h.ClipsDescendants=true h.Parent=parent.P
+    local ROW_H = isMobile and 42 or 36
+    local OPT_H = isMobile and 32 or 26
+    local h=Instance.new("Frame") h.Size=UDim2.new(1,0,0,ROW_H) h.BackgroundColor3=Color3.fromRGB(22,22,30) h.BorderSizePixel=0 h.ClipsDescendants=true h.Parent=parent.P
     local hc=Instance.new("UICorner") hc.CornerRadius=UDim.new(0,8) hc.Parent=h
-    local b=Instance.new("TextButton") b.Size=UDim2.new(1,0,0,34) b.BackgroundTransparency=1 b.Text=text..": "..opts[1] b.TextColor3=Color3.fromRGB(220,220,220) b.TextSize=12 b.Font=Enum.Font.Gotham b.TextXAlignment=Enum.TextXAlignment.Left b.Parent=h
-    local pd=Instance.new("UIPadding") pd.PaddingLeft=UDim.new(0,10) pd.Parent=b
+    local b=Instance.new("TextButton") b.Size=UDim2.new(1,0,0,ROW_H) b.BackgroundTransparency=1 b.Text=text..": "..opts[1] b.TextColor3=Color3.fromRGB(220,220,220) b.TextSize=isMobile and 13 or 12 b.Font=Enum.Font.Gotham b.TextXAlignment=Enum.TextXAlignment.Left b.Parent=h
+    local pd=Instance.new("UIPadding") pd.PaddingLeft=UDim.new(0,12) pd.Parent=b
     local op=false
-    b.MouseButton1Click:Connect(function() op=not op h.Size=op and UDim2.new(1,0,0,34+#opts*26) or UDim2.new(1,0,0,34) end)
+    b.MouseButton1Click:Connect(function() op=not op h.Size=op and UDim2.new(1,0,0,ROW_H+#opts*OPT_H) or UDim2.new(1,0,0,ROW_H) end)
     for i,o in ipairs(opts) do
-        local ob=Instance.new("TextButton") ob.Size=UDim2.new(1,-10,0,24) ob.Position=UDim2.new(0,5,0,34+(i-1)*26) ob.BackgroundColor3=Color3.fromRGB(30,30,40) ob.BorderSizePixel=0 ob.Text=o ob.TextColor3=Color3.fromRGB(200,200,200) ob.TextSize=11 ob.Font=Enum.Font.Gotham ob.Parent=h
+        local ob=Instance.new("TextButton") ob.Size=UDim2.new(1,-12,0,OPT_H-4) ob.Position=UDim2.new(0,6,0,ROW_H+(i-1)*OPT_H) ob.BackgroundColor3=Color3.fromRGB(30,30,40) ob.BorderSizePixel=0 ob.Text=o ob.TextColor3=Color3.fromRGB(200,200,200) ob.TextSize=isMobile and 12 or 11 ob.Font=Enum.Font.Gotham ob.Parent=h
         local oc=Instance.new("UICorner") oc.CornerRadius=UDim.new(0,6) oc.Parent=ob
-        ob.MouseButton1Click:Connect(function() b.Text=text..": "..o op=false h.Size=UDim2.new(1,0,0,34) if cb then cb(o) end end)
+        ob.MouseButton1Click:Connect(function() b.Text=text..": "..o op=false h.Size=UDim2.new(1,0,0,ROW_H) if cb then cb(o) end end)
     end
 end
 
--- ESP tab
 addTgl(V,"ESP Enabled",false,function(s) Config.ESP.Enabled=s end)
 addTgl(V,"Box",true,function(s) Config.ESP.Box=s end)
 addTgl(V,"Name",false,function(s) Config.ESP.Name=s end)
@@ -367,8 +392,7 @@ addTgl(V,"Head Circle",false,function(s) Config.ESP.Head=s end)
 addTgl(V,"Team Check",true,function(s) Config.ESP.TeamCheck=s end)
 addSld(V,"Max Distance",2000,50,500,function(v) Config.ESP.MaxDistance=v end)
 
--- SILENT AIM tab
-addTgl(S,"Silent Aim Enabled",false,function(s)
+addTgl(S,"Aimbot Enabled",false,function(s)
     Config.Silent.Enabled=s
     if FOVCircle then FOVCircle.Visible=s end
 end)
@@ -381,14 +405,15 @@ addSld(S,"FOV",180,30,150,function(v)
 end)
 addDd(S,"Target Part",{"Head","Torso"},function(v) Config.Silent.TargetPart=v end)
 
--- MISC: TG
-local TgHolder=Instance.new("Frame") TgHolder.Size=UDim2.new(1,0,0,96) TgHolder.BackgroundColor3=Color3.fromRGB(22,22,30) TgHolder.BorderSizePixel=0 TgHolder.Parent=MS.P
+local TG_H = isMobile and 110 or 96
+local TgHolder=Instance.new("Frame") TgHolder.Size=UDim2.new(1,0,0,TG_H) TgHolder.BackgroundColor3=Color3.fromRGB(22,22,30) TgHolder.BorderSizePixel=0 TgHolder.Parent=MS.P
 local tghc=Instance.new("UICorner") tghc.CornerRadius=UDim.new(0,8) tghc.Parent=TgHolder
-local TgLabel=Instance.new("TextLabel") TgLabel.Size=UDim2.new(1,-20,0,18) TgLabel.Position=UDim2.new(0,10,0,6) TgLabel.BackgroundTransparency=1 TgLabel.Text="Support author:" TgLabel.TextColor3=Color3.fromRGB(220,220,220) TgLabel.TextSize=12 TgLabel.Font=Enum.Font.Gotham TgLabel.TextXAlignment=Enum.TextXAlignment.Left TgLabel.Parent=TgHolder
-local TgLink=Instance.new("TextButton") TgLink.Size=UDim2.new(1,-20,0,26) TgLink.Position=UDim2.new(0,10,0,28) TgLink.BackgroundColor3=Color3.fromRGB(30,30,40) TgLink.BorderSizePixel=0 TgLink.Text=TG_LINK TgLink.TextColor3=Color3.fromRGB(0,255,200) TgLink.TextSize=13 TgLink.Font=Enum.Font.GothamBold TgLink.AutoButtonColor=false TgLink.Parent=TgHolder
+local TgLabel=Instance.new("TextLabel") TgLabel.Size=UDim2.new(1,-24,0,20) TgLabel.Position=UDim2.new(0,12,0,8) TgLabel.BackgroundTransparency=1 TgLabel.Text="Support author:" TgLabel.TextColor3=Color3.fromRGB(220,220,220) TgLabel.TextSize=isMobile and 13 or 12 TgLabel.Font=Enum.Font.Gotham TgLabel.TextXAlignment=Enum.TextXAlignment.Left TgLabel.Parent=TgHolder
+local TG_BTN_H = isMobile and 34 or 28
+local TgLink=Instance.new("TextButton") TgLink.Size=UDim2.new(1,-24,0,TG_BTN_H) TgLink.Position=UDim2.new(0,12,0,32) TgLink.BackgroundColor3=Color3.fromRGB(30,30,40) TgLink.BorderSizePixel=0 TgLink.Text=TG_LINK TgLink.TextColor3=Color3.fromRGB(0,255,200) TgLink.TextSize=isMobile and 14 or 13 TgLink.Font=Enum.Font.GothamBold TgLink.AutoButtonColor=false TgLink.Parent=TgHolder
 local tgc=Instance.new("UICorner") tgc.CornerRadius=UDim.new(0,6) tgc.Parent=TgLink
-local TgHint=Instance.new("TextLabel") TgHint.Size=UDim2.new(1,-20,0,18) TgHint.Position=UDim2.new(0,10,0,58) TgHint.BackgroundTransparency=1 TgHint.Text="(tap to copy)" TgHint.TextColor3=Color3.fromRGB(150,150,165) TgHint.TextSize=11 TgHint.Font=Enum.Font.Gotham TgHint.TextXAlignment=Enum.TextXAlignment.Center TgHint.Parent=TgHolder
-local TgNotify=Instance.new("TextLabel") TgNotify.Size=UDim2.new(1,-20,0,18) TgNotify.Position=UDim2.new(0,10,0,58) TgNotify.BackgroundTransparency=1 TgNotify.Text="" TgNotify.TextColor3=Color3.fromRGB(0,255,200) TgNotify.TextSize=11 TgNotify.Font=Enum.Font.GothamBold TgNotify.TextXAlignment=Enum.TextXAlignment.Center TgNotify.Parent=TgHolder
+local TgHint=Instance.new("TextLabel") TgHint.Size=UDim2.new(1,-24,0,18) TgHint.Position=UDim2.new(0,12,0,32+TG_BTN_H+6) TgHint.BackgroundTransparency=1 TgHint.Text="(tap to copy)" TgHint.TextColor3=Color3.fromRGB(150,150,165) TgHint.TextSize=isMobile and 12 or 11 TgHint.Font=Enum.Font.Gotham TgHint.TextXAlignment=Enum.TextXAlignment.Center TgHint.Parent=TgHolder
+local TgNotify=Instance.new("TextLabel") TgNotify.Size=UDim2.new(1,-24,0,18) TgNotify.Position=UDim2.new(0,12,0,32+TG_BTN_H+6) TgNotify.BackgroundTransparency=1 TgNotify.Text="" TgNotify.TextColor3=Color3.fromRGB(0,255,200) TgNotify.TextSize=isMobile and 12 or 11 TgNotify.Font=Enum.Font.GothamBold TgNotify.TextXAlignment=Enum.TextXAlignment.Center TgNotify.Parent=TgHolder
 local function cp(t)
     local ok=false
     if setclipboard then pcall(function() setclipboard(t) ok=true end) end
@@ -406,16 +431,19 @@ end)
 TgLink.MouseEnter:Connect(function() TweenService:Create(TgLink,TweenInfo.new(0.15),{BackgroundColor3=Color3.fromRGB(0,255,200),TextColor3=Color3.fromRGB(15,15,20)}):Play() end)
 TgLink.MouseLeave:Connect(function() TweenService:Create(TgLink,TweenInfo.new(0.15),{BackgroundColor3=Color3.fromRGB(30,30,40),TextColor3=Color3.fromRGB(0,255,200)}):Play() end)
 
--- MISC: Info
-local IH=Instance.new("Frame") IH.Size=UDim2.new(1,0,0,96) IH.BackgroundColor3=Color3.fromRGB(22,22,30) IH.BorderSizePixel=0 IH.Parent=MS.P
+local INFO_H = isMobile and 110 or 96
+local IH=Instance.new("Frame") IH.Size=UDim2.new(1,0,0,INFO_H) IH.BackgroundColor3=Color3.fromRGB(22,22,30) IH.BorderSizePixel=0 IH.Parent=MS.P
 local ihc=Instance.new("UICorner") ihc.CornerRadius=UDim.new(0,8) ihc.Parent=IH
-local IT=Instance.new("TextLabel") IT.Size=UDim2.new(1,-20,0,18) IT.Position=UDim2.new(0,10,0,6) IT.BackgroundTransparency=1 IT.Text="Info:" IT.TextColor3=Color3.fromRGB(220,220,220) IT.TextSize=12 IT.Font=Enum.Font.Gotham IT.TextXAlignment=Enum.TextXAlignment.Left IT.Parent=IH
-local RL=Instance.new("TextLabel") RL.Size=UDim2.new(1,-20,0,20) RL.Position=UDim2.new(0,10,0,26) RL.BackgroundTransparency=1 RL.Text="Resolution:" RL.TextColor3=Color3.fromRGB(200,200,200) RL.TextSize=12 RL.Font=Enum.Font.Gotham RL.TextXAlignment=Enum.TextXAlignment.Left RL.Parent=IH
-local RV=Instance.new("TextLabel") RV.Size=UDim2.new(0,100,0,20) RV.Position=UDim2.new(1,-110,0,26) RV.BackgroundTransparency=1 RV.Text="0x0" RV.TextColor3=Color3.fromRGB(0,255,200) RV.TextSize=12 RV.Font=Enum.Font.GothamBold RV.TextXAlignment=Enum.TextXAlignment.Right RV.Parent=IH
-local FL=Instance.new("TextLabel") FL.Size=UDim2.new(1,-20,0,20) FL.Position=UDim2.new(0,10,0,46) FL.BackgroundTransparency=1 FL.Text="FPS:" FL.TextColor3=Color3.fromRGB(200,200,200) FL.TextSize=12 FL.Font=Enum.Font.Gotham FL.TextXAlignment=Enum.TextXAlignment.Left FL.Parent=IH
-local FV=Instance.new("TextLabel") FV.Size=UDim2.new(0,100,0,20) FV.Position=UDim2.new(1,-110,0,46) FV.BackgroundTransparency=1 FV.Text="0" FV.TextColor3=Color3.fromRGB(0,255,200) FV.TextSize=12 FV.Font=Enum.Font.GothamBold FV.TextXAlignment=Enum.TextXAlignment.Right FV.Parent=IH
-local PL=Instance.new("TextLabel") PL.Size=UDim2.new(1,-20,0,20) PL.Position=UDim2.new(0,10,0,66) PL.BackgroundTransparency=1 PL.Text="Ping:" PL.TextColor3=Color3.fromRGB(200,200,200) PL.TextSize=12 PL.Font=Enum.Font.Gotham PL.TextXAlignment=Enum.TextXAlignment.Left PL.Parent=IH
-local PV=Instance.new("TextLabel") PV.Size=UDim2.new(0,100,0,20) PV.Position=UDim2.new(1,-110,0,66) PV.BackgroundTransparency=1 PV.Text="0 ms" PV.TextColor3=Color3.fromRGB(0,255,200) PV.TextSize=12 PV.Font=Enum.Font.GothamBold PV.TextXAlignment=Enum.TextXAlignment.Right PV.Parent=IH
+local ROW1_Y = 28
+local ROW2_Y = isMobile and 52 or 46
+local ROW3_Y = isMobile and 76 or 66
+local IT=Instance.new("TextLabel") IT.Size=UDim2.new(1,-24,0,20) IT.Position=UDim2.new(0,12,0,6) IT.BackgroundTransparency=1 IT.Text="Info:" IT.TextColor3=Color3.fromRGB(220,220,220) IT.TextSize=isMobile and 13 or 12 IT.Font=Enum.Font.Gotham IT.TextXAlignment=Enum.TextXAlignment.Left IT.Parent=IH
+local RL=Instance.new("TextLabel") RL.Size=UDim2.new(1,-24,0,22) RL.Position=UDim2.new(0,12,0,ROW1_Y) RL.BackgroundTransparency=1 RL.Text="Resolution:" RL.TextColor3=Color3.fromRGB(200,200,200) RL.TextSize=isMobile and 13 or 12 RL.Font=Enum.Font.Gotham RL.TextXAlignment=Enum.TextXAlignment.Left RL.Parent=IH
+local RV=Instance.new("TextLabel") RV.Size=UDim2.new(0,110,0,22) RV.Position=UDim2.new(1,-122,0,ROW1_Y) RV.BackgroundTransparency=1 RV.Text="0x0" RV.TextColor3=Color3.fromRGB(0,255,200) RV.TextSize=isMobile and 13 or 12 RV.Font=Enum.Font.GothamBold RV.TextXAlignment=Enum.TextXAlignment.Right RV.Parent=IH
+local FL=Instance.new("TextLabel") FL.Size=UDim2.new(1,-24,0,22) FL.Position=UDim2.new(0,12,0,ROW2_Y) FL.BackgroundTransparency=1 FL.Text="FPS:" FL.TextColor3=Color3.fromRGB(200,200,200) FL.TextSize=isMobile and 13 or 12 FL.Font=Enum.Font.Gotham FL.TextXAlignment=Enum.TextXAlignment.Left FL.Parent=IH
+local FV=Instance.new("TextLabel") FV.Size=UDim2.new(0,110,0,22) FV.Position=UDim2.new(1,-122,0,ROW2_Y) FV.BackgroundTransparency=1 FV.Text="0" FV.TextColor3=Color3.fromRGB(0,255,200) FV.TextSize=isMobile and 13 or 12 FV.Font=Enum.Font.GothamBold FV.TextXAlignment=Enum.TextXAlignment.Right FV.Parent=IH
+local PL=Instance.new("TextLabel") PL.Size=UDim2.new(1,-24,0,22) PL.Position=UDim2.new(0,12,0,ROW3_Y) PL.BackgroundTransparency=1 PL.Text="Ping:" PL.TextColor3=Color3.fromRGB(200,200,200) PL.TextSize=isMobile and 13 or 12 PL.Font=Enum.Font.Gotham PL.TextXAlignment=Enum.TextXAlignment.Left PL.Parent=IH
+local PV=Instance.new("TextLabel") PV.Size=UDim2.new(0,110,0,22) PV.Position=UDim2.new(1,-122,0,ROW3_Y) PV.BackgroundTransparency=1 PV.Text="0 ms" PV.TextColor3=Color3.fromRGB(0,255,200) PV.TextSize=isMobile and 13 or 12 PV.Font=Enum.Font.GothamBold PV.TextXAlignment=Enum.TextXAlignment.Right PV.Parent=IH
 
 local fpsFrames=0 local fpsTime=os.clock() local fpsCurrent=0
 RunService.RenderStepped:Connect(function()
@@ -447,7 +475,7 @@ local function setOpen(s)
     Open=s
     if s then
         Main.Visible=true Main.Size=UDim2.new(0,0,0,0)
-        TweenService:Create(Main,TweenInfo.new(0.2,Enum.EasingStyle.Back,Enum.EasingDirection.Out),{Size=UDim2.new(0,260,0,330)}):Play()
+        TweenService:Create(Main,TweenInfo.new(0.2,Enum.EasingStyle.Back,Enum.EasingDirection.Out),{Size=UDim2.new(0,MENU_W,0,MENU_H)}):Play()
     else
         local t=TweenService:Create(Main,TweenInfo.new(0.15),{Size=UDim2.new(0,0,0,0)})
         t:Play() t.Completed:Connect(function() Main.Visible=false end)
