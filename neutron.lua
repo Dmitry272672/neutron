@@ -1,4 +1,4 @@
--- NEUTRON | Deagle Duels
+-- NEUTRON HUB | Deagle Duels
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -47,6 +47,7 @@ local FOVCircle = nil
 local Open = true
 local CompletelyClosed = false
 
+-- TEAM CHECK
 local function isTeammate(player)
     if not player or player == LocalPlayer then return true end
     local myTeam = LocalPlayer.Team
@@ -69,6 +70,7 @@ local function resolveTargetPart(char, name)
     return char:FindFirstChild(name)
 end
 
+-- ESP
 local function makeLine()
     local l = Drawing.new("Line")
     l.Thickness = math.max(1, math.floor(1.5 * SCALE))
@@ -206,7 +208,9 @@ local function updateESP()
     end
 end
 
+-- SILENT AIM
 local SilentTarget = nil
+local SilentTargetPos = nil
 
 local function getVisibleCheck(targetChar)
     if not Config.Silent.VisibleOnly then return true end
@@ -234,6 +238,7 @@ end
 
 local function findSilentTarget()
     local closest, shortest = nil, math.huge
+    local closestPos = nil
     local center = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
     for _, p in pairs(Players:GetPlayers()) do
         if p == LocalPlayer then continue end
@@ -251,24 +256,60 @@ local function findSilentTarget()
         if d < shortest and d <= Config.Silent.FOV then
             shortest = d
             closest = part
+            closestPos = part.Position
         end
     end
-    return closest
+    return closest, closestPos
 end
 
+-- ХУК 1: Mouse.Hit / Mouse.Target (для игр, использующих Mouse)
 local mt = getrawmetatable(game)
 setreadonly(mt, false)
 local oldIndex = mt.__index
 mt.__index = newcclosure(function(self, key)
-    if not checkcaller() and Config.Silent.Enabled and self == Mouse then
-        if key == "Hit" or key == "Target" then
-            if SilentTarget then return SilentTarget end
+    if not checkcaller() and Config.Silent.Enabled then
+        if self == Mouse and (key == "Hit" or key == "Target") then
+            if SilentTarget then
+                if key == "Hit" then
+                    return CFrame.new(SilentTarget.Position)
+                else
+                    return SilentTarget
+                end
+            end
         end
     end
     return oldIndex(self, key)
 end)
 setreadonly(mt, true)
 
+-- ХУК 2: Camera:ViewportPointToRay / ScreenPointToRay (для FPS-игр типа Deagle Duels)
+local oldViewportPointToRay = Camera.ViewportPointToRay
+Camera.ViewportPointToRay = newcclosure(function(self, x, y, depth)
+    if not checkcaller() and Config.Silent.Enabled and SilentTarget then
+        local centerX = Camera.ViewportSize.X / 2
+        local centerY = Camera.ViewportSize.Y / 2
+        if math.abs(x - centerX) < 5 and math.abs(y - centerY) < 5 then
+            local dir = (SilentTarget.Position - Camera.CFrame.Position).Unit
+            return Ray.new(Camera.CFrame.Position, dir * (depth or 1000))
+        end
+    end
+    return oldViewportPointToRay(self, x, y, depth)
+end)
+
+local oldScreenPointToRay = Camera.ScreenPointToRay
+Camera.ScreenPointToRay = newcclosure(function(self, x, y, depth)
+    if not checkcaller() and Config.Silent.Enabled and SilentTarget then
+        local centerX = Camera.ViewportSize.X / 2
+        local centerY = Camera.ViewportSize.Y / 2
+        if math.abs(x - centerX) < 5 and math.abs(y - centerY) < 5 then
+            local dir = (SilentTarget.Position - Camera.CFrame.Position).Unit
+            return Ray.new(Camera.CFrame.Position, dir * (depth or 1000))
+        end
+    end
+    return oldScreenPointToRay(self, x, y, depth)
+end)
+
+-- FOV Circle
 local function createFOVCircle()
     if FOVCircle then FOVCircle:Remove() end
     FOVCircle = Drawing.new("Circle")
@@ -282,8 +323,9 @@ local function createFOVCircle()
 end
 createFOVCircle()
 
+-- UI
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "NeutronDD"
+ScreenGui.Name = "NeutronHub"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.IgnoreGuiInset = true
 ScreenGui.DisplayOrder = 999
@@ -345,7 +387,7 @@ local Ttl = Instance.new("TextLabel")
 Ttl.Size = UDim2.new(1,-160,1,0)
 Ttl.Position = UDim2.new(0,42,0,0)
 Ttl.BackgroundTransparency = 1
-Ttl.Text = "NEUTRON | DD"
+Ttl.Text = "NEUTRON HUB"
 Ttl.TextColor3 = Color3.fromRGB(0,255,200)
 Ttl.TextSize = 15
 Ttl.Font = Enum.Font.GothamBold
@@ -826,9 +868,10 @@ Players.PlayerRemoving:Connect(removeESP)
 RunService.RenderStepped:Connect(function()
     if CompletelyClosed then return end
     if Config.Silent.Enabled then
-        SilentTarget = findSilentTarget()
+        SilentTarget, SilentTargetPos = findSilentTarget()
     else
         SilentTarget = nil
+        SilentTargetPos = nil
     end
     updateESP()
     if FOVCircle and FOVCircle.Visible then
@@ -836,4 +879,4 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
-print("NEUTRON DD loaded!")
+print("NEUTRON HUB loaded!")
