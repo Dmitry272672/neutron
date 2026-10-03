@@ -1,14 +1,13 @@
--- Neutron rust | Silent Aim + ESP
+-- test | Menu
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-local Workspace = game:GetService("Workspace")
 local TweenService = game:GetService("TweenService")
 local Stats = game:GetService("Stats")
+local Workspace = game:GetService("Workspace")
 local Camera = Workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
-local Mouse = LocalPlayer:GetMouse()
 
 local IMAGE_URL = "rbxassetid://138823883244540"
 local TG_LINK = "t.me/neutron_client"
@@ -29,351 +28,18 @@ end
 SCALE = getScale()
 Camera:GetPropertyChangedSignal("ViewportSize"):Connect(function() SCALE = getScale() end)
 
-local Config = {
-    ESP = {
-        Enabled = false, Box = true, Name = false, Distance = false,
-        Health = false, Tracer = false, Skeleton = false, Head = false,
-        MaxDistance = 500,
-    },
-}
-
-local ESPObjects = {}
-local FOVCircle = nil
 local Open = true
 local CompletelyClosed = false
 
--- ===== SILENT AIM =====
-local SILENT_ENABLED = false
-local SILENT_TEAM_CHECK = false
-local SILENT_VISIBLE_CHECK = false
-local SILENT_TARGET_PART = "Head"
-local SILENT_FOV = 100
-local SelectedPart = nil
-
-local function ResolveTargetPart(char, targetName)
-    if not char then return nil end
-    if targetName == "Head" then
-        return char:FindFirstChild("Head")
-    elseif targetName == "Torso" then
-        return char:FindFirstChild("UpperTorso")
-            or char:FindFirstChild("Torso")
-            or char:FindFirstChild("LowerTorso")
-            or char:FindFirstChild("HumanoidRootPart")
-    end
-    return char:FindFirstChild(targetName)
-        or char:FindFirstChild("HumanoidRootPart")
-        or char:FindFirstChild("Head")
-end
-
-local SKELETON_BONES = {
-    {"Head","UpperTorso"},{"UpperTorso","LowerTorso"},{"UpperTorso","LeftUpperArm"},
-    {"LeftUpperArm","LeftLowerArm"},{"LeftLowerArm","LeftHand"},{"UpperTorso","RightUpperArm"},
-    {"RightUpperArm","RightLowerArm"},{"RightLowerArm","RightHand"},{"LowerTorso","LeftUpperLeg"},
-    {"LeftUpperLeg","LeftLowerLeg"},{"LeftLowerLeg","LeftFoot"},{"LowerTorso","RightUpperLeg"},
-    {"RightUpperLeg","RightLowerLeg"},{"RightLowerLeg","RightFoot"},
-}
-
-local function isR15(c) return c:FindFirstChild("UpperTorso") ~= nil end
-
-local function makeLine()
-    local l = Drawing.new("Line")
-    l.Thickness = math.max(1, math.floor(1.5 * SCALE))
-    l.Color = Color3.fromRGB(255,255,255)
-    l.Transparency = 1
-    l.Visible = false
-    return l
-end
-
-local function createESP(player)
-    if player == LocalPlayer then return end
-    if ESPObjects[player] then return end
-    local d = {}
-    d.Box = Drawing.new("Square")
-    d.Box.Thickness = math.max(1, 1.5*SCALE)
-    d.Box.Color = Color3.fromRGB(0,255,200)
-    d.Box.Filled = false
-    d.Box.Transparency = 1
-    d.Box.Visible = false
-    d.Name = Drawing.new("Text")
-    d.Name.Size = math.floor(14*SCALE)
-    d.Name.Center = true
-    d.Name.Outline = true
-    d.Name.Color = Color3.fromRGB(255,255,255)
-    d.Name.Visible = false
-    d.Distance = Drawing.new("Text")
-    d.Distance.Size = math.floor(13*SCALE)
-    d.Distance.Center = true
-    d.Distance.Outline = true
-    d.Distance.Color = Color3.fromRGB(200,200,200)
-    d.Distance.Visible = false
-    d.HealthBG = makeLine()
-    d.HealthBG.Thickness = math.max(2, 3*SCALE)
-    d.HealthBG.Color = Color3.fromRGB(0,0,0)
-    d.HealthBar = makeLine()
-    d.HealthBar.Thickness = math.max(2, 3*SCALE)
-    d.HealthBar.Color = Color3.fromRGB(0,255,0)
-    d.Tracer = makeLine()
-    d.Tracer.Color = Color3.fromRGB(0,255,200)
-    d.SkeletonLines = {}
-    for i = 1, #SKELETON_BONES do d.SkeletonLines[i] = makeLine() end
-    d.HeadCircle = Drawing.new("Circle")
-    d.HeadCircle.Thickness = math.max(1, 1.5*SCALE)
-    d.HeadCircle.NumSides = 24
-    d.HeadCircle.Radius = 10*SCALE
-    d.HeadCircle.Filled = false
-    d.HeadCircle.Color = Color3.fromRGB(255,255,255)
-    d.HeadCircle.Transparency = 1
-    d.HeadCircle.Visible = false
-    ESPObjects[player] = d
-end
-
-local function removeESP(player)
-    local o = ESPObjects[player]
-    if not o then return end
-    for k, v in pairs(o) do
-        if typeof(v) == "table" then
-            for _, x in pairs(v) do pcall(function() x:Remove() end) end
-        else pcall(function() v:Remove() end) end
-    end
-    ESPObjects[player] = nil
-end
-
-local function hideAll(o)
-    o.Box.Visible = false
-    o.Name.Visible = false
-    o.Distance.Visible = false
-    o.HealthBG.Visible = false
-    o.HealthBar.Visible = false
-    o.Tracer.Visible = false
-    o.HeadCircle.Visible = false
-    for _, l in pairs(o.SkeletonLines) do l.Visible = false end
-end
-
-local function w2s(p)
-    local sp, on = Camera:WorldToViewportPoint(p)
-    if on then return Vector2.new(sp.X, sp.Y) end
-    return nil
-end
-
-local function getBodyFrame(char)
-    local h = char:FindFirstChild("Head")
-    local r = char:FindFirstChild("HumanoidRootPart")
-    if not h or not r then return nil end
-    local hp, hon = Camera:WorldToViewportPoint(h.Position)
-    if not hon then return nil end
-    local lowY = nil
-    for _, n in ipairs({"LeftFoot","RightFoot","LeftLowerLeg","RightLowerLeg","LeftLeg","RightLeg","LowerTorso","Torso","HumanoidRootPart"}) do
-        local p = char:FindFirstChild(n)
-        if p then
-            local sp, on = Camera:WorldToViewportPoint(p.Position)
-            if on and (lowY == nil or sp.Y > lowY) then lowY = sp.Y end
-        end
-    end
-    if not lowY then
-        local sp, on = Camera:WorldToViewportPoint(r.Position)
-        if on then lowY = sp.Y else return nil end
-    end
-    local hgt = math.abs(lowY - hp.Y)
-    if hgt < 4 then hgt = 6*SCALE end
-    local w = hgt * 0.55
-    local cx = hp.X
-    return {
-        top = Vector2.new(cx - w/2, hp.Y),
-        bottom = Vector2.new(cx + w/2, hp.Y + hgt),
-        centerX = cx, height = hgt,
-    }
-end
-
-local function updateESP()
-    for p, o in pairs(ESPObjects) do
-        if not Config.ESP.Enabled then hideAll(o); continue end
-        local c = p.Character
-        if not c then hideAll(o); continue end
-        local r = c:FindFirstChild("HumanoidRootPart")
-        local hum = c:FindFirstChildOfClass("Humanoid")
-        if not r or not hum or hum.Health <= 0 then hideAll(o); continue end
-        local dist = (Camera.CFrame.Position - r.Position).Magnitude
-        if dist > Config.ESP.MaxDistance then hideAll(o); continue end
-        local f = getBodyFrame(c)
-        if f then
-            local t = f.top
-            local b = f.bottom
-            if Config.ESP.Box then
-                o.Box.Size = Vector2.new(b.X - t.X, b.Y - t.Y)
-                o.Box.Position = t
-                o.Box.Visible = true
-            else o.Box.Visible = false end
-            if Config.ESP.Name then
-                o.Name.Text = p.Name
-                o.Name.Position = Vector2.new(f.centerX, t.Y - 20*SCALE)
-                o.Name.Visible = true
-            else o.Name.Visible = false end
-            if Config.ESP.Distance then
-                o.Distance.Text = string.format("[%d m]", math.floor(dist))
-                o.Distance.Position = Vector2.new(f.centerX, b.Y + 2*SCALE)
-                o.Distance.Visible = true
-            else o.Distance.Visible = false end
-            if Config.ESP.Health then
-                local pc = math.clamp(hum.Health / math.max(hum.MaxHealth, 1), 0, 1)
-                local bh = b.Y - t.Y
-                local off = 6*SCALE
-                o.HealthBG.From = Vector2.new(t.X - off, t.Y)
-                o.HealthBG.To = Vector2.new(t.X - off, b.Y)
-                o.HealthBG.Visible = true
-                o.HealthBar.From = Vector2.new(t.X - off, b.Y - bh * pc)
-                o.HealthBar.To = Vector2.new(t.X - off, b.Y)
-                o.HealthBar.Color = Color3.fromRGB(math.floor(255*(1-pc)), math.floor(255*pc), 0)
-                o.HealthBar.Visible = true
-            else
-                o.HealthBar.Visible = false
-                o.HealthBG.Visible = false
-            end
-            if Config.ESP.Tracer then
-                o.Tracer.From = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y)
-                o.Tracer.To = Vector2.new(f.centerX, b.Y)
-                o.Tracer.Visible = true
-            else o.Tracer.Visible = false end
-        else
-            o.Box.Visible = false
-            o.Name.Visible = false
-            o.Distance.Visible = false
-            o.HealthBar.Visible = false
-            o.HealthBG.Visible = false
-            o.Tracer.Visible = false
-        end
-        if Config.ESP.Skeleton and isR15(c) then
-            for i, bone in ipairs(SKELETON_BONES) do
-                local a = c:FindFirstChild(bone[1])
-                local b = c:FindFirstChild(bone[2])
-                local line = o.SkeletonLines[i]
-                if a and b then
-                    local pa = w2s(a.Position)
-                    local pb = w2s(b.Position)
-                    if pa and pb then
-                        line.From = pa
-                        line.To = pb
-                        line.Visible = true
-                    else line.Visible = false end
-                else line.Visible = false end
-            end
-        else
-            for _, l in pairs(o.SkeletonLines) do l.Visible = false end
-        end
-        if Config.ESP.Head then
-            local hd = c:FindFirstChild("Head")
-            if hd then
-                local pt = w2s(hd.Position)
-                if pt and f then
-                    o.HeadCircle.Position = pt
-                    o.HeadCircle.Radius = math.max(f.height * 0.16, 8*SCALE)
-                    o.HeadCircle.Visible = true
-                else o.HeadCircle.Visible = false end
-            else o.HeadCircle.Visible = false end
-        else o.HeadCircle.Visible = false end
-    end
-end
-
--- ===== SILENT AIM =====
-local function SilentIsVisible(player, part)
-    local char = player.Character
-    local myChar = LocalPlayer.Character
-    if not char or not myChar then return false end
-    local ok, parts = pcall(function()
-        return Camera:GetPartsObscuringTarget({part.Position}, {myChar, char})
-    end)
-    if not ok then return true end
-    return #parts == 0
-end
-
-local function FindSilentTarget()
-    local best, bestDist = nil, math.huge
-    local center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player == LocalPlayer then continue end
-        if SILENT_TEAM_CHECK and player.Team == LocalPlayer.Team then continue end
-        local char = player.Character
-        if not char then continue end
-        local humanoid = char:FindFirstChildOfClass("Humanoid")
-        if not humanoid or humanoid.Health <= 0 then continue end
-        local part = ResolveTargetPart(char, SILENT_TARGET_PART)
-        if not part then continue end
-        if SILENT_VISIBLE_CHECK and not SilentIsVisible(player, part) then continue end
-        local screenPos, onScreen = Camera:WorldToViewportPoint(part.Position)
-        if not onScreen then continue end
-        local dist = (Vector2.new(screenPos.X, screenPos.Y) - center).Magnitude
-        if dist <= SILENT_FOV and dist < bestDist then
-            best = part
-            bestDist = dist
-        end
-    end
-    return best
-end
-
--- ===== HOOKS (без FireServer — урон проходит) =====
-local mt = getrawmetatable(game)
-local oldIndex = mt.__index
-local oldNamecall = mt.__namecall
-setreadonly(mt, false)
-
-mt.__index = function(self, key)
-    if not checkcaller() and SILENT_ENABLED and self == Mouse and SelectedPart then
-        if key == "Hit" then
-            return SelectedPart.CFrame
-        elseif key == "Target" then
-            return SelectedPart
-        end
-    end
-    return oldIndex(self, key)
-end
-
-mt.__namecall = function(self, ...)
-    local method = getnamecallmethod()
-    if not checkcaller() and SILENT_ENABLED and SelectedPart then
-        if method == "Raycast" and self == Workspace then
-            local args = {...}
-            local origin, direction = args[1], args[2]
-            if origin and direction then
-                local newDir = (SelectedPart.Position - origin).Unit * direction.Magnitude
-                return oldNamecall(self, origin, newDir, select(3, ...))
-            end
-        end
-        if (method == "FindPartOnRayWithIgnoreList" or method == "FindPartOnRayWithWhitelist") and self == Workspace then
-            local args = {...}
-            local ray = args[1]
-            if ray then
-                local newRay = Ray.new(ray.Origin, (SelectedPart.Position - ray.Origin).Unit * ray.Direction.Magnitude)
-                return oldNamecall(self, newRay, select(2, ...))
-            end
-        end
-    end
-    return oldNamecall(self, ...)
-end
-
-setreadonly(mt, true)
-
--- ===== FOV CIRCLE =====
-local function createFOVCircle()
-    if FOVCircle then FOVCircle:Remove() end
-    FOVCircle = Drawing.new("Circle")
-    FOVCircle.Thickness = math.max(1.5, 2*SCALE)
-    FOVCircle.NumSides = 60
-    FOVCircle.Radius = SILENT_FOV
-    FOVCircle.Filled = false
-    FOVCircle.Color = Color3.fromRGB(0,255,200)
-    FOVCircle.Transparency = 0.8
-    FOVCircle.Visible = false
-    FOVCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
-end
-createFOVCircle()
-
 -- ===== UI =====
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "NeutronRust"
+ScreenGui.Name = "test"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.IgnoreGuiInset = true
 ScreenGui.DisplayOrder = 999
 ScreenGui.Parent = (gethui and gethui()) or LocalPlayer:WaitForChild("PlayerGui")
 
+-- ===== Кнопка открытия =====
 local ToggleBtn = Instance.new("ImageButton")
 ToggleBtn.Size = UDim2.new(0, 46, 0, 46)
 ToggleBtn.Position = UDim2.new(0, 12, 0.4, 0)
@@ -394,6 +60,7 @@ tbStroke.Thickness = 1.5
 tbStroke.Transparency = 0.3
 tbStroke.Parent = ToggleBtn
 
+-- ===== Основное окно =====
 local Main = Instance.new("Frame")
 Main.Size = UDim2.new(0, 260, 0, 330)
 Main.Position = UDim2.new(0.5, -130, 0.5, -165)
@@ -412,6 +79,7 @@ mainStroke.Thickness = 1.5
 mainStroke.Transparency = 0.4
 mainStroke.Parent = Main
 
+-- ===== Верхняя панель =====
 local TopBar = Instance.new("Frame")
 TopBar.Size = UDim2.new(1, 0, 0, 42)
 TopBar.BackgroundColor3 = Color3.fromRGB(22,22,30)
@@ -441,7 +109,7 @@ local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, -160, 1, 0)
 Title.Position = UDim2.new(0, 42, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "Neutron rust"
+Title.Text = "test"
 Title.TextColor3 = Color3.fromRGB(0,255,200)
 Title.TextSize = 15
 Title.Font = Enum.Font.GothamBold
@@ -472,6 +140,7 @@ MinimizeBtn.Font = Enum.Font.GothamBold
 MinimizeBtn.AutoButtonColor = false
 MinimizeBtn.Parent = TopBar
 
+-- ===== Вкладки =====
 local TabsFrame = Instance.new("Frame")
 TabsFrame.Size = UDim2.new(0, 72, 1, -50)
 TabsFrame.Position = UDim2.new(0, 6, 0, 46)
@@ -500,6 +169,7 @@ Content.BackgroundTransparency = 1
 Content.ClipsDescendants = true
 Content.Parent = Main
 
+-- ===== Перетаскивание кнопки =====
 local btnDragging = false
 local btnDragStart = nil
 local btnStartPos = nil
@@ -538,6 +208,7 @@ UserInputService.InputEnded:Connect(function(input)
     or input.UserInputType == Enum.UserInputType.Touch then btnDragging = false end
 end)
 
+-- ===== Перетаскивание меню =====
 local menuDragging = false
 local menuDragStart = nil
 local menuStartPos = nil
@@ -565,6 +236,7 @@ UserInputService.InputEnded:Connect(function(input)
     or input.UserInputType == Enum.UserInputType.Touch then menuDragging = false end
 end)
 
+-- ===== Вкладки =====
 local function makeTab(name)
     local btn = Instance.new("TextButton")
     btn.Size = UDim2.new(1, -10, 0, 34)
@@ -602,7 +274,7 @@ local function makeTab(name)
 end
 
 local Visual = makeTab("ESP")
-local Combat = makeTab("SILENT AIM")
+local Combat = makeTab("AIM")
 local Misc = makeTab("MISC")
 local allTabs = {Visual, Combat, Misc}
 
@@ -626,6 +298,7 @@ Combat.Button.MouseButton1Click:Connect(function() selectTab(Combat) end)
 Misc.Button.MouseButton1Click:Connect(function() selectTab(Misc) end)
 selectTab(Visual)
 
+-- ===== Элементы =====
 local function addToggle(parent, text, default, callback)
     local holder = Instance.new("Frame")
     holder.Size = UDim2.new(1, 0, 0, 34)
@@ -807,29 +480,25 @@ local function addDropdown(parent, text, options, callback)
     end
 end
 
-addToggle(Visual, "ESP Enabled", false, function(s) Config.ESP.Enabled = s end)
-addToggle(Visual, "Box", true, function(s) Config.ESP.Box = s end)
-addToggle(Visual, "Name", false, function(s) Config.ESP.Name = s end)
-addToggle(Visual, "Distance", false, function(s) Config.ESP.Distance = s end)
-addToggle(Visual, "Health Bar", false, function(s) Config.ESP.Health = s end)
-addToggle(Visual, "Tracer", false, function(s) Config.ESP.Tracer = s end)
-addToggle(Visual, "Skeleton", false, function(s) Config.ESP.Skeleton = s end)
-addToggle(Visual, "Head Circle", false, function(s) Config.ESP.Head = s end)
-addSlider(Visual, "Max Distance", 2000, 50, 500, function(v) Config.ESP.MaxDistance = v end)
+-- ===== ESP Tab =====
+addToggle(Visual, "ESP Enabled", false, function(s) end)
+addToggle(Visual, "Box", true, function(s) end)
+addToggle(Visual, "Name", false, function(s) end)
+addToggle(Visual, "Distance", false, function(s) end)
+addToggle(Visual, "Health Bar", false, function(s) end)
+addToggle(Visual, "Tracer", false, function(s) end)
+addToggle(Visual, "Skeleton", false, function(s) end)
+addToggle(Visual, "Head Circle", false, function(s) end)
+addSlider(Visual, "Max Distance", 2000, 50, 500, function(v) end)
 
-addToggle(Combat, "Silent Aim Enabled", false, function(s)
-    SILENT_ENABLED = s
-    if FOVCircle then FOVCircle.Visible = s end
-end)
-addToggle(Combat, "Visible Only", false, function(s) SILENT_VISIBLE_CHECK = s end)
-addSlider(Combat, "FOV", 200, 30, 100, function(v)
-    SILENT_FOV = v
-    if FOVCircle then FOVCircle.Radius = v end
-end)
-addDropdown(Combat, "Target", {"Head", "Torso"}, function(v)
-    SILENT_TARGET_PART = v
-end)
+-- ===== AIM Tab =====
+addToggle(Combat, "Aimbot Enabled", false, function(s) end)
+addToggle(Combat, "Visible Only", true, function(s) end)
+addSlider(Combat, "Smoothness", 10, 1, 8, function(v) end)
+addSlider(Combat, "FOV", 200, 30, 100, function(v) end)
+addDropdown(Combat, "Target", {"Head", "Torso"}, function(v) end)
 
+-- ===== MISC: TG =====
 local TgHolder = Instance.new("Frame")
 TgHolder.Size = UDim2.new(1, 0, 0, 96)
 TgHolder.BackgroundColor3 = Color3.fromRGB(22,22,30)
@@ -927,6 +596,7 @@ TgLink.MouseLeave:Connect(function()
     }):Play()
 end)
 
+-- ===== MISC: Info =====
 local InfoHolder = Instance.new("Frame")
 InfoHolder.Size = UDim2.new(1, 0, 0, 96)
 InfoHolder.BackgroundColor3 = Color3.fromRGB(22,22,30)
@@ -1014,6 +684,7 @@ PingValue.Font = Enum.Font.GothamBold
 PingValue.TextXAlignment = Enum.TextXAlignment.Right
 PingValue.Parent = InfoHolder
 
+-- ===== FPS/Ping =====
 local fpsFrames = 0
 local fpsTime = os.clock()
 local fpsCurrent = 0
@@ -1053,6 +724,7 @@ task.spawn(function()
     end
 end)
 
+-- ===== Открытие/закрытие =====
 local function setOpen(state)
     Open = state
     if state then
@@ -1076,10 +748,6 @@ local function fullyClose()
     t.Completed:Connect(function()
         Main.Visible = false
         if ToggleBtn then ToggleBtn.Visible = false end
-        Config.ESP.Enabled = false
-        SILENT_ENABLED = false
-        if FOVCircle then FOVCircle.Visible = false end
-        for _, obj in pairs(ESPObjects) do hideAll(obj) end
     end)
 end
 
@@ -1099,21 +767,4 @@ CloseBtn.MouseButton1Click:Connect(function() fullyClose() end)
 CloseBtn.MouseEnter:Connect(function() CloseBtn.TextColor3 = Color3.fromRGB(255,30,30) end)
 CloseBtn.MouseLeave:Connect(function() CloseBtn.TextColor3 = Color3.fromRGB(255,90,90) end)
 
-for _, player in pairs(Players:GetPlayers()) do createESP(player) end
-Players.PlayerAdded:Connect(createESP)
-Players.PlayerRemoving:Connect(removeESP)
-
-RunService.RenderStepped:Connect(function()
-    if CompletelyClosed then return end
-    updateESP()
-    if SILENT_ENABLED then
-        SelectedPart = FindSilentTarget()
-    else
-        SelectedPart = nil
-    end
-    if FOVCircle and FOVCircle.Visible then
-        FOVCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
-    end
-end)
-
-print("Neutron rust loaded!")
+print("test loaded!")
