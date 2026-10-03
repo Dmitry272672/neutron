@@ -1,4 +1,4 @@
--- Neutron rust | Silent Aim for Decay (mkrejd)
+-- Neutron rust | Silent Aim for Decay (mkrejd) - Fixed Damage
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -309,7 +309,7 @@ local function FindSilentTarget()
     return best
 end
 
--- ===== SILENT AIM HOOKS =====
+-- ===== HOOKS (только локальные) =====
 local mt = getrawmetatable(game)
 local oldIndex = mt.__index
 local oldNamecall = mt.__namecall
@@ -350,29 +350,7 @@ mt.__namecall = function(self, ...)
                 return oldNamecall(self, newRay, select(2, ...))
             end
         end
-        if method == "FireServer" or method == "InvokeServer" then
-            local args = {...}
-            local changed = false
-            for i, arg in ipairs(args) do
-                if typeof(arg) == "CFrame" then
-                    args[i] = CFrame.new(arg.Position, SelectedPart.Position)
-                    changed = true
-                elseif typeof(arg) == "Vector3" then
-                    local dir = (SelectedPart.Position - Camera.CFrame.Position).Unit
-                    args[i] = dir * arg.Magnitude
-                    changed = true
-                elseif typeof(arg) == "Ray" then
-                    args[i] = Ray.new(
-                        arg.Origin,
-                        (SelectedPart.Position - arg.Origin).Unit * arg.Direction.Magnitude
-                    )
-                    changed = true
-                end
-            end
-            if changed then
-                return oldNamecall(self, table.unpack(args))
-            end
-        end
+        -- ВАЖНО: FireServer больше НЕ подменяется
     end
     return oldNamecall(self, ...)
 end
