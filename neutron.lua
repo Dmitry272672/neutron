@@ -35,19 +35,12 @@ local Config = {
         Health = false, Tracer = false, Skeleton = false, Head = false,
         MaxDistance = 500,
     },
-    Aimbot = {
-        Enabled = false, Smoothness = 8, FOV = 60,
-        VisibleOnly = true, TargetPart = "Torso",
-        ReactionDelay = 0.15, AimJitter = 0.008,
-    },
 }
 
 local ESPObjects = {}
 local FOVCircle = nil
 local Open = true
 local CompletelyClosed = false
-local aimStartTime = 0
-local aiming = false
 
 -- ===== SILENT AIM =====
 local SILENT_ENABLED = true
@@ -161,30 +154,6 @@ local function makeBaseIgnore()
     if LocalPlayer.Character then table.insert(t, LocalPlayer.Character) end
     if Camera then table.insert(t, Camera) end
     return t
-end
-
-local function isVisible(tc)
-    if not tc or not LocalPlayer.Character then return false end
-    local mc = LocalPlayer.Character
-    local mh = mc:FindFirstChild("Head") or mc:FindFirstChild("HumanoidRootPart")
-    if not mh then return false end
-    local origin = mh.Position
-    local pts = {}
-    for _, n in ipairs({"Head","UpperTorso","Torso","LowerTorso","HumanoidRootPart"}) do
-        local p = tc:FindFirstChild(n)
-        if p then table.insert(pts, p.Position) end
-    end
-    if #pts == 0 then return false end
-    local il = makeBaseIgnore()
-    table.insert(il, tc)
-    local rp = RaycastParams.new()
-    rp.FilterDescendantsInstances = il
-    rp.FilterType = Enum.RaycastFilterType.Exclude
-    rp.IgnoreWater = true
-    for _, tp in ipairs(pts) do
-        if Workspace:Raycast(origin, tp - origin, rp) == nil then return true end
-    end
-    return false
 end
 
 local function w2s(p)
@@ -311,54 +280,6 @@ local function updateESP()
     end
 end
 
-local function getClosestTarget()
-    local closest, sDist = nil, math.huge
-    local cn = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
-    for _, p in pairs(Players:GetPlayers()) do
-        if p == LocalPlayer then continue end
-        local c = p.Character
-        if not c then continue end
-        local hum = c:FindFirstChildOfClass("Humanoid")
-        if not hum or hum.Health <= 0 then continue end
-        local part = ResolveTargetPart(c, Config.Aimbot.TargetPart)
-        if not part then continue end
-        if Config.Aimbot.VisibleOnly and not isVisible(c) then continue end
-        local sp, on = Camera:WorldToViewportPoint(part.Position)
-        if not on then continue end
-        local d = (Vector2.new(sp.X, sp.Y) - cn).Magnitude
-        if d < sDist and d <= Config.Aimbot.FOV then sDist = d; closest = part end
-    end
-    return closest
-end
-
-local function doAimbot()
-    if not Config.Aimbot.Enabled then return end
-    if aiming and os.clock() - aimStartTime < Config.Aimbot.ReactionDelay then return end
-    local t = getClosestTarget()
-    if not t then return end
-    local la = math.clamp(0.825 - (Config.Aimbot.Smoothness * 0.075), 0.05, 1)
-    local jit = Config.Aimbot.AimJitter
-    local tp = t.Position + Vector3.new(
-        (math.random()-0.5)*jit,
-        (math.random()-0.5)*jit,
-        (math.random()-0.5)*jit
-    )
-    Camera.CFrame = Camera.CFrame:Lerp(CFrame.new(Camera.CFrame.Position, tp), la)
-end
-
-local function createFOVCircle()
-    if FOVCircle then FOVCircle:Remove() end
-    FOVCircle = Drawing.new("Circle")
-    FOVCircle.Thickness = math.max(1, 1.5*SCALE)
-    FOVCircle.NumSides = 60
-    FOVCircle.Radius = Config.Aimbot.FOV
-    FOVCircle.Filled = false
-    FOVCircle.Color = Color3.fromRGB(0,255,200)
-    FOVCircle.Transparency = 0.7
-    FOVCircle.Visible = false
-end
-createFOVCircle()
-
 -- ===== SILENT AIM FUNCTIONS =====
 local function SilentIsVisible(player, part)
     local char = player.Character
@@ -464,6 +385,21 @@ mt.__namecall = function(self, ...)
 end
 
 setreadonly(mt, true)
+
+-- ===== FOV CIRCLE (ВИДИМЫЙ) =====
+local function createFOVCircle()
+    if FOVCircle then FOVCircle:Remove() end
+    FOVCircle = Drawing.new("Circle")
+    FOVCircle.Thickness = math.max(1, 1.5*SCALE)
+    FOVCircle.NumSides = 60
+    FOVCircle.Radius = SILENT_FOV
+    FOVCircle.Filled = false
+    FOVCircle.Color = Color3.fromRGB(0,255,200)
+    FOVCircle.Transparency = 0.7
+    FOVCircle.Visible = true
+    FOVCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+end
+createFOVCircle()
 
 -- ===== UI =====
 local ScreenGui = Instance.new("ScreenGui")
@@ -918,6 +854,7 @@ addSlider(Visual, "Max Distance", 2000, 50, 500, function(v) Config.ESP.MaxDista
 
 addToggle(Combat, "Silent Aim Enabled", true, function(s)
     SILENT_ENABLED = s
+    if FOVCircle then FOVCircle.Visible = s end
 end)
 addToggle(Combat, "Visible Only", false, function(s) SILENT_VISIBLE_CHECK = s end)
 addSlider(Combat, "FOV", 360, 30, 360, function(v)
@@ -1204,7 +1141,6 @@ Players.PlayerRemoving:Connect(removeESP)
 RunService.RenderStepped:Connect(function()
     if CompletelyClosed then return end
     updateESP()
-    doAimbot()
     if SILENT_ENABLED then
         SelectedPart = FindSilentTarget()
     else
