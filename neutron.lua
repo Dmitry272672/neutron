@@ -1,4 +1,4 @@
--- Neutron rust | Silent Aim for Decay (mkrejd) - Fixed Damage
+-- Neutron rust | Silent Aim + ESP
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -309,7 +309,7 @@ local function FindSilentTarget()
     return best
 end
 
--- ===== HOOKS (только локальные) =====
+-- ===== HOOKS (без FireServer — урон проходит) =====
 local mt = getrawmetatable(game)
 local oldIndex = mt.__index
 local oldNamecall = mt.__namecall
@@ -331,26 +331,20 @@ mt.__namecall = function(self, ...)
     if not checkcaller() and SILENT_ENABLED and SelectedPart then
         if method == "Raycast" and self == Workspace then
             local args = {...}
-            local origin = args[1]
-            local direction = args[2]
+            local origin, direction = args[1], args[2]
             if origin and direction then
                 local newDir = (SelectedPart.Position - origin).Unit * direction.Magnitude
                 return oldNamecall(self, origin, newDir, select(3, ...))
             end
         end
-        if (method == "FindPartOnRayWithIgnoreList"
-        or method == "FindPartOnRayWithWhitelist") and self == Workspace then
+        if (method == "FindPartOnRayWithIgnoreList" or method == "FindPartOnRayWithWhitelist") and self == Workspace then
             local args = {...}
             local ray = args[1]
             if ray then
-                local newRay = Ray.new(
-                    ray.Origin,
-                    (SelectedPart.Position - ray.Origin).Unit * ray.Direction.Magnitude
-                )
+                local newRay = Ray.new(ray.Origin, (SelectedPart.Position - ray.Origin).Unit * ray.Direction.Magnitude)
                 return oldNamecall(self, newRay, select(2, ...))
             end
         end
-        -- ВАЖНО: FireServer больше НЕ подменяется
     end
     return oldNamecall(self, ...)
 end
