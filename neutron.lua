@@ -43,11 +43,11 @@ local Open = true
 local CompletelyClosed = false
 
 -- ===== SILENT AIM =====
-local SILENT_ENABLED = true
+local SILENT_ENABLED = false
 local SILENT_TEAM_CHECK = false
 local SILENT_VISIBLE_CHECK = false
-local SILENT_TARGET_PART = "Head"   -- "Head" / "Torso"
-local SILENT_FOV = 360
+local SILENT_TARGET_PART = "Head"
+local SILENT_FOV = 100
 local SelectedPart = nil
 
 local function ResolveTargetPart(char, targetName)
@@ -147,13 +147,6 @@ local function hideAll(o)
     o.Tracer.Visible = false
     o.HeadCircle.Visible = false
     for _, l in pairs(o.SkeletonLines) do l.Visible = false end
-end
-
-local function makeBaseIgnore()
-    local t = {}
-    if LocalPlayer.Character then table.insert(t, LocalPlayer.Character) end
-    if Camera then table.insert(t, Camera) end
-    return t
 end
 
 local function w2s(p)
@@ -280,7 +273,7 @@ local function updateESP()
     end
 end
 
--- ===== SILENT AIM FUNCTIONS =====
+-- ===== SILENT AIM =====
 local function SilentIsVisible(player, part)
     local char = player.Character
     local myChar = LocalPlayer.Character
@@ -386,17 +379,17 @@ end
 
 setreadonly(mt, true)
 
--- ===== FOV CIRCLE (ВИДИМЫЙ) =====
+-- ===== FOV CIRCLE =====
 local function createFOVCircle()
     if FOVCircle then FOVCircle:Remove() end
     FOVCircle = Drawing.new("Circle")
-    FOVCircle.Thickness = math.max(1, 1.5*SCALE)
+    FOVCircle.Thickness = math.max(1.5, 2*SCALE)
     FOVCircle.NumSides = 60
     FOVCircle.Radius = SILENT_FOV
     FOVCircle.Filled = false
     FOVCircle.Color = Color3.fromRGB(0,255,200)
-    FOVCircle.Transparency = 0.7
-    FOVCircle.Visible = true
+    FOVCircle.Transparency = 0.8
+    FOVCircle.Visible = false
     FOVCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
 end
 createFOVCircle()
@@ -852,12 +845,12 @@ addToggle(Visual, "Skeleton", false, function(s) Config.ESP.Skeleton = s end)
 addToggle(Visual, "Head Circle", false, function(s) Config.ESP.Head = s end)
 addSlider(Visual, "Max Distance", 2000, 50, 500, function(v) Config.ESP.MaxDistance = v end)
 
-addToggle(Combat, "Silent Aim Enabled", true, function(s)
+addToggle(Combat, "Silent Aim Enabled", false, function(s)
     SILENT_ENABLED = s
     if FOVCircle then FOVCircle.Visible = s end
 end)
 addToggle(Combat, "Visible Only", false, function(s) SILENT_VISIBLE_CHECK = s end)
-addSlider(Combat, "FOV", 360, 30, 360, function(v)
+addSlider(Combat, "FOV", 200, 30, 100, function(v)
     SILENT_FOV = v
     if FOVCircle then FOVCircle.Radius = v end
 end)
