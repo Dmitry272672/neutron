@@ -11,13 +11,14 @@ local IMAGE_URL = "rbxassetid://138823883244540"
 local TG_LINK = "t.me/Neutron016"
 
 -- ============================================================
--- НАСТРОЙКА ОБЪЕКТОВ ДЛЯ ESP (ЗАМЕНИ НАЗВАНИЯ ПОД DECAY RUST)
+-- КЛЮЧЕВЫЕ СЛОВА ДЛЯ АВТОПОИСКА (НЕ НУЖНО КОПАТЬСЯ В ИГРЕ)
+-- Скрипт найдет объект, если в его названии есть ОДНО из этих слов
 -- ============================================================
-local OBJECT_NAMES = {
-    Closet = "Closet",   -- Название шкафа в игре
-    Chest = "Chest",     -- Название сундука
-    Sleeping = "Sleeping", -- Название спящего
-    Dead = "Dead"        -- Название умершего
+local KEYWORDS = {
+    Closet = {"Closet", "Wardrobe", "Locker", "Cabinet"},
+    Chest = {"Chest", "Crate", "Box", "Loot", "Container"},
+    Sleeping = {"Sleep", "Bed", "Sleeping"},
+    Dead = {"Dead", "Body", "Corpse", "Death"}
 }
 -- ============================================================
 
@@ -61,7 +62,122 @@ local Open = true
 local CompletelyClosed = false
 local aimStartTime = 0
 local aiming = false
-local currentAimTarget = nil
+
+-- ==========================================
+-- СИСТЕМА УМНОГО ПОИСКА ОБЪЕКТОВ
+-- ==========================================
+local function checkKeywords(name, keywordList)
+    local lowerName = string.lower(name)
+    for _, kw in ipairs(keywordList) do
+        if string.find(lowerName, string.lower(kw)) then
+            return true
+        end
+    end
+    return false
+end
+
+local function scanAndHighlight()
+    for category, keywords in pairs(KEYWORDS) do
+        if Config.ESP[category] then
+            if not ObjectESP[category] then
+                ObjectESP[category] = { Instances = {}, Boxes = {} }
+            end
+
+            for _, v in pairs(Workspace:GetDescendants()) do
+                -- Проверяем только модели и части
+                if (v:IsA("Model") or v:IsA("BasePart")) and checkKeywords(v.Name, keywords) then
+                    -- Если объект еще не подсвечен
+                    if not v:FindFirstChild("ESP_HL_" .. category) then
+                        local hl = Instance.new("Highlight")
+                        hl.Name = "ESP_HL_" .. category
+                        hl.Adornee = v
+                        hl.Parent = v
+                        hl.FillColor = Color3.fromRGB(255, 255, 0) -- Желтый
+                        hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+                        hl.FillTransparency = 0.5
+                        hl.OutlineTransparency = 0
+                        table.insert(ObjectESP[category].Instances, hl)
+
+                        -- Создаем бокс и текст на экране
+                        local box = Drawing.new("Square")
+                        box.Thickness = 1
+                        box.Color = Color3.fromRGB(255, 255, 0) -- Желтый
+                        box.Filled = false
+                        box.Visible = false
+                        
+                        local txt = Drawing.new("Text")
+                        txt.Size = 14
+                        txt.Center = true
+                        txt.Outline = true
+                        txt.Color = Color3.fromRGB(255, 255, 0)
+                        txt.Visible = false
+                        
+                        table.insert(ObjectESP[category].Boxes, {instance = v, box = box, text = txt})
+                    end
+                end
+            end
+        end
+    end
+end
+
+local function updateObjectESP()
+    for category, data in pairs(ObjectESP) do
+        if not Config.ESP[category] then
+            -- Если выключили, удаляем подсветку
+            for _, hl in pairs(data.Instances) do
+                if hl and hl.Parent then hl:Destroy() end
+            end
+            for _, b in pairs(data.Boxes) do
+                b.box:Remove()
+                b.text:Remove()
+            end
+            ObjectESP[category] = nil
+        else
+            -- Отрисовка боксов
+            for _, b in pairs(data.Boxes) do
+                local v = b.instance
+                if v and v.Parent then
+                    local pos = nil
+                    if v:IsA("Model") then
+                        pos = v:FindFirstChild("HumanoidRootPart") and v.HumanoidRootPart.Position or (v.PrimaryPart and v.PrimaryPart.Position)
+                    elseif v:IsA("BasePart") then
+                        pos = v.Position
+                    end
+
+                    if pos then
+                        local sp, onScreen = Camera:WorldToViewportPoint(pos)
+                        if onScreen then
+                            local dist = (Camera.CFrame.Position - pos).Magnitude
+                            if dist <= Config.ESP.MaxDistance then
+                                local text = string.format("%s [%d m]", category, math.floor(dist))
+                                b.text.Text = text
+                                b.text.Position = Vector2.new(sp.X, sp.Y - 20)
+                                b.text.Visible = true
+                                
+                                b.box.Size = Vector2.new(40, 40)
+                                b.box.Position = Vector2.new(sp.X - 20, sp.Y - 20)
+                                b.box.Visible = true
+                            else
+                                b.text.Visible = false
+                                b.box.Visible = false
+                            end
+                        else
+                            b.text.Visible = false
+                            b.box.Visible = false
+                        end
+                    end
+                else
+                    b.box.Visible = false
+                    b.text.Visible = false
+                end
+            end
+        end
+    end
+end
+
+-- ==========================================
+-- ОСТАЛЬНЫЕ ФУНКЦИИ (ESP ИГРОКОВ И АИМ)
+-- ==========================================
 
 local function resolveTargetPart(char, targetName)
     if not char then return nil end
@@ -296,124 +412,6 @@ local function updateESP()
     end
 end
 
--- ============================================================
--- ЛОГИКА ДЛЯ ESP ОБЪЕКТОВ (Шкаф, Сундук, Спящий, Умерший)
--- ============================================================
-local function toggleObjectESP(name, enabled)
-    if enabled then
-        if not ObjectESP[name] then
-            ObjectESP[name] = {
-                Enabled = true,
-                Instances = {},
-                Boxes = {}
-            }
-        else
-            ObjectESP[name].Enabled = true
-        end
-        
-        task.spawn(function()
-            while ObjectESP[name] and ObjectESP[name].Enabled do
-                local targetName = OBJECT_NAMES[name]
-                for _, v in pairs(Workspace:GetDescendants()) do
-                    if v.Name == targetName then
-                        -- Если это модель или часть
-                        if v:IsA("Model") or v:IsA("BasePart") then
-                            -- Создаем Highlight, если его нет
-                            if not v:FindFirstChild("ESP_Highlight_" .. name) then
-                                local hl = Instance.new("Highlight")
-                                hl.Name = "ESP_Highlight_" .. name
-                                hl.Adornee = v -- ПРИВЯЗЫВАЕМ К ОБЪЕКТУ!
-                                hl.Parent = v
-                                hl.FillColor = Color3.fromRGB(0, 255, 255) -- Голубой
-                                hl.OutlineColor = Color3.fromRGB(255, 255, 255)
-                                hl.FillTransparency = 0.5
-                                hl.OutlineTransparency = 0
-                                table.insert(ObjectESP[name].Instances, hl)
-                            end
-                            
-                            -- Создаем бокс и текст для отображения на экране
-                            if not v:FindFirstChild("ESP_Drawing_" .. name) then
-                                local box = Drawing.new("Square")
-                                box.Thickness = 1
-                                box.Color = Color3.fromRGB(0, 255, 255)
-                                box.Filled = false
-                                box.Visible = false
-                                
-                                local txt = Drawing.new("Text")
-                                txt.Size = 14
-                                txt.Center = true
-                                txt.Outline = true
-                                txt.Color = Color3.fromRGB(0, 255, 255)
-                                txt.Visible = false
-                                
-                                table.insert(ObjectESP[name].Boxes, {instance = v, box = box, text = txt})
-                            end
-                        end
-                    end
-                end
-                task.wait(1)
-            end
-        end)
-    else
-        if ObjectESP[name] then
-            ObjectESP[name].Enabled = false
-            for _, hl in pairs(ObjectESP[name].Instances) do
-                if hl and hl.Parent then hl:Destroy() end
-            end
-            for _, b in pairs(ObjectESP[name].Boxes) do
-                b.box:Remove()
-                b.text:Remove()
-            end
-            ObjectESP[name].Instances = {}
-            ObjectESP[name].Boxes = {}
-        end
-    end
-end
-
-local function updateObjectESP()
-    for name, data in pairs(ObjectESP) do
-        if not data.Enabled then continue end
-        for _, b in pairs(data.Boxes) do
-            local v = b.instance
-            if v and v.Parent then
-                local pos = nil
-                if v:IsA("Model") then
-                    pos = v:FindFirstChild("HumanoidRootPart") and v.HumanoidRootPart.Position or (v.PrimaryPart and v.PrimaryPart.Position)
-                elseif v:IsA("BasePart") then
-                    pos = v.Position
-                end
-
-                if pos then
-                    local sp, onScreen = Camera:WorldToViewportPoint(pos)
-                    if onScreen then
-                        local dist = (Camera.CFrame.Position - pos).Magnitude
-                        if dist <= Config.ESP.MaxDistance then
-                            local text = string.format("%s [%d m]", name, math.floor(dist))
-                            b.text.Text = text
-                            b.text.Position = Vector2.new(sp.X, sp.Y - 20)
-                            b.text.Visible = true
-                            
-                            b.box.Size = Vector2.new(40, 40)
-                            b.box.Position = Vector2.new(sp.X - 20, sp.Y - 20)
-                            b.box.Visible = true
-                        else
-                            b.text.Visible = false
-                            b.box.Visible = false
-                        end
-                    else
-                        b.text.Visible = false
-                        b.box.Visible = false
-                    end
-                end
-            else
-                b.box.Visible = false
-                b.text.Visible = false
-            end
-        end
-    end
-end
--- ============================================================
-
 local function getClosestTargetForSilentAim()
     local closest, sDist = nil, math.huge
     local cn = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
@@ -431,30 +429,6 @@ local function getClosestTargetForSilentAim()
         local part = resolveTargetPart(c, Config.SilentAim.TargetPart)
         if not part then continue end
         if Config.SilentAim.SilentAimVisibleCheck and not isVisible(c) then continue end
-        local sp, on = Camera:WorldToViewportPoint(part.Position)
-        if not on then continue end
-        local d = (Vector2.new(sp.X, sp.Y) - cn).Magnitude
-        if d < sDist and d <= Config.SilentAim.FOV then sDist = d; closest = part end
-    end
-    return closest
-end
-
-local function getClosestTargetForLine()
-    local closest, sDist = nil, math.huge
-    local cn = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
-    for _, p in pairs(Players:GetPlayers()) do
-        if p == LocalPlayer then continue end
-        local c = p.Character
-        if not c then continue end
-        local hum = c:FindFirstChildOfClass("Humanoid")
-        if not hum or hum.Health <= 0 then continue end
-        local root = c:FindFirstChild("HumanoidRootPart")
-        if root then
-            local dist = (Camera.CFrame.Position - root.Position).Magnitude
-            if dist > Config.SilentAim.MaxAimDistance then continue end
-        end
-        local part = resolveTargetPart(c, Config.SilentAim.TargetPart)
-        if not part then continue end
         local sp, on = Camera:WorldToViewportPoint(part.Position)
         if not on then continue end
         local d = (Vector2.new(sp.X, sp.Y) - cn).Magnitude
@@ -922,93 +896,23 @@ local function addDropdown(parent, text, options, callback)
     end
 end
 
--- === ПОДВКЛАДКИ В ESP (Players / Other) ===
-local SubTabsFrame = Instance.new("Frame")
-SubTabsFrame.Size = UDim2.new(1, 0, 0, 30)
-SubTabsFrame.BackgroundTransparency = 1
-SubTabsFrame.Parent = Visual.Page
-SubTabsFrame.LayoutOrder = -1
+-- ESP Настройки
+addToggle(Visual.Page, "ESP Enabled", false, function(s) Config.ESP.Enabled = s end)
+addToggle(Visual.Page, "Visible Check", false, function(s) Config.ESP.VisibleCheck = s end)
+addToggle(Visual.Page, "Box", false, function(s) Config.ESP.Box = s end)
+addToggle(Visual.Page, "Name", false, function(s) Config.ESP.Name = s end)
+addToggle(Visual.Page, "Health Bar", false, function(s) Config.ESP.Health = s end)
+addToggle(Visual.Page, "Tracer", false, function(s) Config.ESP.Tracer = s end)
+addToggle(Visual.Page, "Skeleton", false, function(s) Config.ESP.Skeleton = s end)
+addToggle(Visual.Page, "Head Circle", false, function(s) Config.ESP.Head = s end)
+addToggle(Visual.Page, "Show Distance", false, function(s) Config.ESP.Distance = s end)
+addSlider(Visual.Page, "ESP Distance", 2000, 0, 1000, function(v) Config.ESP.MaxDistance = v end)
 
-local SubPlayersBtn = Instance.new("TextButton")
-SubPlayersBtn.Size = UDim2.new(0.5, -2, 1, 0)
-SubPlayersBtn.Position = UDim2.new(0, 0, 0, 0)
-SubPlayersBtn.BackgroundColor3 = CLR_TOGGLE_ON
-SubPlayersBtn.BorderSizePixel = 0
-SubPlayersBtn.Text = "Players"
-SubPlayersBtn.TextColor3 = CLR_BG
-SubPlayersBtn.Font = Enum.Font.GothamBold
-SubPlayersBtn.TextSize = 12
-SubPlayersBtn.Parent = SubTabsFrame
-local spc = Instance.new("UICorner")
-spc.CornerRadius = UDim.new(0,6)
-spc.Parent = SubPlayersBtn
-
-local SubOtherBtn = Instance.new("TextButton")
-SubOtherBtn.Size = UDim2.new(0.5, -2, 1, 0)
-SubOtherBtn.Position = UDim2.new(0.5, 2, 0, 0)
-SubOtherBtn.BackgroundColor3 = CLR_ELEM
-SubOtherBtn.BorderSizePixel = 0
-SubOtherBtn.Text = "Other"
-SubOtherBtn.TextColor3 = CLR_TEXT_DARK
-SubOtherBtn.Font = Enum.Font.GothamBold
-SubOtherBtn.TextSize = 12
-SubOtherBtn.Parent = SubTabsFrame
-local soc = Instance.new("UICorner")
-soc.CornerRadius = UDim.new(0,6)
-soc.Parent = SubOtherBtn
-
-local PagePlayers = Instance.new("Frame")
-PagePlayers.Size = UDim2.new(1, 0, 1, -35)
-PagePlayers.Position = UDim2.new(0, 0, 0, 35)
-PagePlayers.BackgroundTransparency = 1
-PagePlayers.Parent = Visual.Page
-local pplLayout = Instance.new("UIListLayout")
-pplLayout.Padding = UDim.new(0, 5)
-pplLayout.SortOrder = Enum.SortOrder.LayoutOrder
-pplLayout.Parent = PagePlayers
-
-local PageOther = Instance.new("Frame")
-PageOther.Size = UDim2.new(1, 0, 1, -35)
-PageOther.Position = UDim2.new(0, 0, 0, 35)
-PageOther.BackgroundTransparency = 1
-PageOther.Visible = false
-PageOther.Parent = Visual.Page
-local othLayout = Instance.new("UIListLayout")
-othLayout.Padding = UDim.new(0, 5)
-othLayout.SortOrder = Enum.SortOrder.LayoutOrder
-othLayout.Parent = PageOther
-
-SubPlayersBtn.MouseButton1Click:Connect(function()
-    PagePlayers.Visible = true
-    PageOther.Visible = false
-    TweenService:Create(SubPlayersBtn, TweenInfo.new(0.15), {BackgroundColor3 = CLR_TOGGLE_ON, TextColor3 = CLR_BG}):Play()
-    TweenService:Create(SubOtherBtn, TweenInfo.new(0.15), {BackgroundColor3 = CLR_ELEM, TextColor3 = CLR_TEXT_DARK}):Play()
-end)
-
-SubOtherBtn.MouseButton1Click:Connect(function()
-    PagePlayers.Visible = false
-    PageOther.Visible = true
-    TweenService:Create(SubOtherBtn, TweenInfo.new(0.15), {BackgroundColor3 = CLR_TOGGLE_ON, TextColor3 = CLR_BG}):Play()
-    TweenService:Create(SubPlayersBtn, TweenInfo.new(0.15), {BackgroundColor3 = CLR_ELEM, TextColor3 = CLR_TEXT_DARK}):Play()
-end)
-
--- ESP Настройки (Players)
-addToggle(PagePlayers, "ESP Enabled", false, function(s) Config.ESP.Enabled = s end)
-addToggle(PagePlayers, "Visible Check", false, function(s) Config.ESP.VisibleCheck = s end)
-addToggle(PagePlayers, "Box", false, function(s) Config.ESP.Box = s end)
-addToggle(PagePlayers, "Name", false, function(s) Config.ESP.Name = s end)
-addToggle(PagePlayers, "Health Bar", false, function(s) Config.ESP.Health = s end)
-addToggle(PagePlayers, "Tracer", false, function(s) Config.ESP.Tracer = s end)
-addToggle(PagePlayers, "Skeleton", false, function(s) Config.ESP.Skeleton = s end)
-addToggle(PagePlayers, "Head Circle", false, function(s) Config.ESP.Head = s end)
-addToggle(PagePlayers, "Show Distance", false, function(s) Config.ESP.Distance = s end)
-addSlider(PagePlayers, "ESP Distance", 2000, 0, 1000, function(v) Config.ESP.MaxDistance = v end)
-
--- ESP Настройки (Other)
-addToggle(PageOther, "ESP Closet", false, function(s) Config.ESP.Closet = s; toggleObjectESP("Closet", s) end)
-addToggle(PageOther, "ESP Chest", false, function(s) Config.ESP.Chest = s; toggleObjectESP("Chest", s) end)
-addToggle(PageOther, "ESP Sleeping", false, function(s) Config.ESP.Sleeping = s; toggleObjectESP("Sleeping", s) end)
-addToggle(PageOther, "ESP Dead", false, function(s) Config.ESP.Dead = s; toggleObjectESP("Dead", s) end)
+-- ESP Объекты
+addToggle(Visual.Page, "ESP Closet", false, function(s) Config.ESP.Closet = s end)
+addToggle(Visual.Page, "ESP Chest", false, function(s) Config.ESP.Chest = s end)
+addToggle(Visual.Page, "ESP Sleeping", false, function(s) Config.ESP.Sleeping = s end)
+addToggle(Visual.Page, "ESP Dead", false, function(s) Config.ESP.Dead = s end)
 
 -- SILENT AIM Настройки
 addToggle(Combat.Page, "Silent Aim Enabled", false, function(s)
@@ -1025,6 +929,7 @@ end)
 addSlider(Combat.Page, "Aim Distance", 2000, 0, 1000, function(v) Config.SilentAim.MaxAimDistance = v end)
 addDropdown(Combat.Page, "Target", {"Torso", "Head"}, function(v) Config.SilentAim.TargetPart = v end)
 
+-- Tabs
 local TgHolder = Instance.new("Frame")
 TgHolder.Size = UDim2.new(1, 0, 0, 96)
 TgHolder.BackgroundColor3 = CLR_ELEM
@@ -1280,6 +1185,12 @@ local function fullyClose()
                     if hl and hl.Parent then hl:Destroy() end
                 end
             end
+            if obj.Boxes then
+                for _, b in pairs(obj.Boxes) do
+                    b.box:Remove()
+                    b.text:Remove()
+                end
+            end
         end
     end)
 end
@@ -1304,10 +1215,20 @@ for _, player in pairs(Players:GetPlayers()) do createESP(player) end
 Players.PlayerAdded:Connect(createESP)
 Players.PlayerRemoving:Connect(removeESP)
 
+-- Главный цикл
+task.spawn(function()
+    while true do
+        task.wait(2) -- Сканируем раз в 2 секунды, чтобы не лагало
+        if not CompletelyClosed then
+            scanAndHighlight()
+        end
+    end
+end)
+
 RunService.RenderStepped:Connect(function()
     if CompletelyClosed then return end
     updateESP()
-    updateObjectESP() -- Отрисовка объектов
+    updateObjectESP()
     doSilentAim()
     
     if Config.SilentAim.Enabled and Config.SilentAim.Line then
