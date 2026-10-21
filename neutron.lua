@@ -298,14 +298,14 @@ end
 
 -- ============================================================
 -- ЛОГИКА ДЛЯ ESP ОБЪЕКТОВ (Шкаф, Сундук, Спящий, Умерший)
--- Использует Highlight для отображения модели сквозь стены
 -- ============================================================
 local function toggleObjectESP(name, enabled)
     if enabled then
         if not ObjectESP[name] then
             ObjectESP[name] = {
                 Enabled = true,
-                Instances = {}
+                Instances = {},
+                Boxes = {}
             }
         else
             ObjectESP[name].Enabled = true
@@ -315,29 +315,100 @@ local function toggleObjectESP(name, enabled)
             while ObjectESP[name] and ObjectESP[name].Enabled do
                 local targetName = OBJECT_NAMES[name]
                 for _, v in pairs(Workspace:GetDescendants()) do
-                    if v.Name == targetName and not v:FindFirstChild("ESP_Highlight_" .. name) then
-                        local hl = Instance.new("Highlight")
-                        hl.Name = "ESP_Highlight_" .. name
-                        hl.Parent = v
-                        hl.FillColor = Color3.fromRGB(0, 255, 255) -- Голубой
-                        hl.OutlineColor = Color3.fromRGB(255, 255, 255)
-                        hl.FillTransparency = 0.5
-                        hl.OutlineTransparency = 0
-                        table.insert(ObjectESP[name].Instances, hl)
+                    if v.Name == targetName then
+                        -- Если это модель или часть
+                        if v:IsA("Model") or v:IsA("BasePart") then
+                            -- Создаем Highlight, если его нет
+                            if not v:FindFirstChild("ESP_Highlight_" .. name) then
+                                local hl = Instance.new("Highlight")
+                                hl.Name = "ESP_Highlight_" .. name
+                                hl.Adornee = v -- ПРИВЯЗЫВАЕМ К ОБЪЕКТУ!
+                                hl.Parent = v
+                                hl.FillColor = Color3.fromRGB(0, 255, 255) -- Голубой
+                                hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+                                hl.FillTransparency = 0.5
+                                hl.OutlineTransparency = 0
+                                table.insert(ObjectESP[name].Instances, hl)
+                            end
+                            
+                            -- Создаем бокс и текст для отображения на экране
+                            if not v:FindFirstChild("ESP_Drawing_" .. name) then
+                                local box = Drawing.new("Square")
+                                box.Thickness = 1
+                                box.Color = Color3.fromRGB(0, 255, 255)
+                                box.Filled = false
+                                box.Visible = false
+                                
+                                local txt = Drawing.new("Text")
+                                txt.Size = 14
+                                txt.Center = true
+                                txt.Outline = true
+                                txt.Color = Color3.fromRGB(0, 255, 255)
+                                txt.Visible = false
+                                
+                                table.insert(ObjectESP[name].Boxes, {instance = v, box = box, text = txt})
+                            end
+                        end
                     end
                 end
-                task.wait(2)
+                task.wait(1)
             end
         end)
     else
         if ObjectESP[name] then
             ObjectESP[name].Enabled = false
             for _, hl in pairs(ObjectESP[name].Instances) do
-                if hl and hl.Parent then
-                    hl:Destroy()
-                end
+                if hl and hl.Parent then hl:Destroy() end
+            end
+            for _, b in pairs(ObjectESP[name].Boxes) do
+                b.box:Remove()
+                b.text:Remove()
             end
             ObjectESP[name].Instances = {}
+            ObjectESP[name].Boxes = {}
+        end
+    end
+end
+
+local function updateObjectESP()
+    for name, data in pairs(ObjectESP) do
+        if not data.Enabled then continue end
+        for _, b in pairs(data.Boxes) do
+            local v = b.instance
+            if v and v.Parent then
+                local pos = nil
+                if v:IsA("Model") then
+                    pos = v:FindFirstChild("HumanoidRootPart") and v.HumanoidRootPart.Position or (v.PrimaryPart and v.PrimaryPart.Position)
+                elseif v:IsA("BasePart") then
+                    pos = v.Position
+                end
+
+                if pos then
+                    local sp, onScreen = Camera:WorldToViewportPoint(pos)
+                    if onScreen then
+                        local dist = (Camera.CFrame.Position - pos).Magnitude
+                        if dist <= Config.ESP.MaxDistance then
+                            local text = string.format("%s [%d m]", name, math.floor(dist))
+                            b.text.Text = text
+                            b.text.Position = Vector2.new(sp.X, sp.Y - 20)
+                            b.text.Visible = true
+                            
+                            b.box.Size = Vector2.new(40, 40)
+                            b.box.Position = Vector2.new(sp.X - 20, sp.Y - 20)
+                            b.box.Visible = true
+                        else
+                            b.text.Visible = false
+                            b.box.Visible = false
+                        end
+                    else
+                        b.text.Visible = false
+                        b.box.Visible = false
+                    end
+                end
+            else
+                b.box.Visible = false
+                b.text.Visible = false
+            end
         end
     end
 end
@@ -1236,6 +1307,7 @@ Players.PlayerRemoving:Connect(removeESP)
 RunService.RenderStepped:Connect(function()
     if CompletelyClosed then return end
     updateESP()
+    updateObjectESP() -- Отрисовка объектов
     doSilentAim()
     
     if Config.SilentAim.Enabled and Config.SilentAim.Line then
