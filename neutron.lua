@@ -1,5 +1,3 @@
--- Neutron rost alpha | Universal Silent Aim
-
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -8,10 +6,9 @@ local TweenService = game:GetService("TweenService")
 local Stats = game:GetService("Stats")
 local Camera = Workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
-local Mouse = LocalPlayer:GetMouse()
 
 local IMAGE_URL = "rbxassetid://138823883244540"
-local TG_LINK = "t.me/neutron_client"
+local TG_LINK = "t.me/Neutron016"
 
 local SCALE = 1
 local screenResText = "0x0"
@@ -33,7 +30,13 @@ local Config = {
     ESP = {
         Enabled = false, Box = true, Name = false, Distance = false,
         Health = false, Tracer = false, Skeleton = false, Head = false,
-        MaxDistance = 500,
+        MaxDistance = 500, VisibleCheck = false,
+        ItemEnabled = false, ItemName = true, ItemDistance = false
+    },
+    Aimbot = {
+        Enabled = false, Smoothness = 8, FOV = 60,
+        VisibleOnly = true, TargetPart = "Torso",
+        ReactionDelay = 0.15, AimJitter = 0.008,
     },
 }
 
@@ -41,28 +44,17 @@ local ESPObjects = {}
 local FOVCircle = nil
 local Open = true
 local CompletelyClosed = false
+local aimStartTime = 0
+local aiming = false
 
--- ===== SILENT AIM =====
-local SILENT_ENABLED = false
-local SILENT_TEAM_CHECK = false
-local SILENT_VISIBLE_CHECK = false
-local SILENT_TARGET_PART = "Head"
-local SILENT_FOV = 150
-local SelectedPart = nil
-
-local function ResolveTargetPart(char, targetName)
+local function resolveTargetPart(char, targetName)
     if not char then return nil end
-    if targetName == "Head" then
-        return char:FindFirstChild("Head")
-    elseif targetName == "Torso" then
-        return char:FindFirstChild("UpperTorso")
-            or char:FindFirstChild("Torso")
-            or char:FindFirstChild("LowerTorso")
-            or char:FindFirstChild("HumanoidRootPart")
+    if targetName == "Head" then return char:FindFirstChild("Head") end
+    if targetName == "Torso" then
+        return char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso")
+            or char:FindFirstChild("LowerTorso") or char:FindFirstChild("HumanoidRootPart")
     end
     return char:FindFirstChild(targetName)
-        or char:FindFirstChild("HumanoidRootPart")
-        or char:FindFirstChild("Head")
 end
 
 local SKELETON_BONES = {
@@ -78,7 +70,7 @@ local function isR15(c) return c:FindFirstChild("UpperTorso") ~= nil end
 local function makeLine()
     local l = Drawing.new("Line")
     l.Thickness = math.max(1, math.floor(1.5 * SCALE))
-    l.Color = Color3.fromRGB(255,255,255)
+    l.Color = Color3.fromRGB(255,255,255) 
     l.Transparency = 1
     l.Visible = false
     return l
@@ -90,32 +82,39 @@ local function createESP(player)
     local d = {}
     d.Box = Drawing.new("Square")
     d.Box.Thickness = math.max(1, 1.5*SCALE)
-    d.Box.Color = Color3.fromRGB(0,255,200)
+    d.Box.Color = Color3.fromRGB(255,255,255)
     d.Box.Filled = false
     d.Box.Transparency = 1
     d.Box.Visible = false
+    
     d.Name = Drawing.new("Text")
     d.Name.Size = math.floor(14*SCALE)
     d.Name.Center = true
     d.Name.Outline = true
     d.Name.Color = Color3.fromRGB(255,255,255)
     d.Name.Visible = false
+    
     d.Distance = Drawing.new("Text")
     d.Distance.Size = math.floor(13*SCALE)
     d.Distance.Center = true
     d.Distance.Outline = true
     d.Distance.Color = Color3.fromRGB(200,200,200)
     d.Distance.Visible = false
+    
     d.HealthBG = makeLine()
     d.HealthBG.Thickness = math.max(2, 3*SCALE)
     d.HealthBG.Color = Color3.fromRGB(0,0,0)
+    
     d.HealthBar = makeLine()
     d.HealthBar.Thickness = math.max(2, 3*SCALE)
-    d.HealthBar.Color = Color3.fromRGB(0,255,0)
+    d.HealthBar.Color = Color3.fromRGB(255,255,255) 
+    
     d.Tracer = makeLine()
-    d.Tracer.Color = Color3.fromRGB(0,255,200)
+    d.Tracer.Color = Color3.fromRGB(255,255,255) 
+    
     d.SkeletonLines = {}
     for i = 1, #SKELETON_BONES do d.SkeletonLines[i] = makeLine() end
+    
     d.HeadCircle = Drawing.new("Circle")
     d.HeadCircle.Thickness = math.max(1, 1.5*SCALE)
     d.HeadCircle.NumSides = 24
@@ -124,6 +123,7 @@ local function createESP(player)
     d.HeadCircle.Color = Color3.fromRGB(255,255,255)
     d.HeadCircle.Transparency = 1
     d.HeadCircle.Visible = false
+    
     ESPObjects[player] = d
 end
 
@@ -225,25 +225,45 @@ local function updateESP()
         if not r or not hum or hum.Health <= 0 then hideAll(o); continue end
         local dist = (Camera.CFrame.Position - r.Position).Magnitude
         if dist > Config.ESP.MaxDistance then hideAll(o); continue end
+        
         local f = getBodyFrame(c)
+        
+        local targetColor = Color3.fromRGB(255, 255, 255) 
+        if Config.ESP.VisibleCheck then
+            if isVisible(c) then
+                targetColor = Color3.fromRGB(0, 255, 0)
+            else
+                targetColor = Color3.fromRGB(255, 0, 0)
+            end
+        end
+        
         if f then
             local t = f.top
             local b = f.bottom
+            
+            o.Box.Color = targetColor
+            o.Tracer.Color = targetColor
+            o.HeadCircle.Color = targetColor
+            for _, l in pairs(o.SkeletonLines) do l.Color = targetColor end
+            
             if Config.ESP.Box then
                 o.Box.Size = Vector2.new(b.X - t.X, b.Y - t.Y)
                 o.Box.Position = t
                 o.Box.Visible = true
             else o.Box.Visible = false end
+            
             if Config.ESP.Name then
                 o.Name.Text = p.Name
                 o.Name.Position = Vector2.new(f.centerX, t.Y - 20*SCALE)
                 o.Name.Visible = true
             else o.Name.Visible = false end
+            
             if Config.ESP.Distance then
                 o.Distance.Text = string.format("[%d m]", math.floor(dist))
                 o.Distance.Position = Vector2.new(f.centerX, b.Y + 2*SCALE)
                 o.Distance.Visible = true
             else o.Distance.Visible = false end
+            
             if Config.ESP.Health then
                 local pc = math.clamp(hum.Health / math.max(hum.MaxHealth, 1), 0, 1)
                 local bh = b.Y - t.Y
@@ -253,12 +273,12 @@ local function updateESP()
                 o.HealthBG.Visible = true
                 o.HealthBar.From = Vector2.new(t.X - off, b.Y - bh * pc)
                 o.HealthBar.To = Vector2.new(t.X - off, b.Y)
-                o.HealthBar.Color = Color3.fromRGB(math.floor(255*(1-pc)), math.floor(255*pc), 0)
                 o.HealthBar.Visible = true
             else
                 o.HealthBar.Visible = false
                 o.HealthBG.Visible = false
             end
+            
             if Config.ESP.Tracer then
                 o.Tracer.From = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y)
                 o.Tracer.To = Vector2.new(f.centerX, b.Y)
@@ -272,6 +292,7 @@ local function updateESP()
             o.HealthBG.Visible = false
             o.Tracer.Visible = false
         end
+        
         if Config.ESP.Skeleton and isR15(c) then
             for i, bone in ipairs(SKELETON_BONES) do
                 local a = c:FindFirstChild(bone[1])
@@ -290,6 +311,7 @@ local function updateESP()
         else
             for _, l in pairs(o.SkeletonLines) do l.Visible = false end
         end
+        
         if Config.ESP.Head then
             local hd = c:FindFirstChild("Head")
             if hd then
@@ -304,139 +326,75 @@ local function updateESP()
     end
 end
 
--- ===== SILENT AIM FUNCTIONS =====
-local function SilentIsVisible(player, part)
-    local char = player.Character
-    local myChar = LocalPlayer.Character
-    if not char or not myChar then return false end
-    local ok, parts = pcall(function()
-        return Camera:GetPartsObscuringTarget({part.Position}, {myChar, char})
-    end)
-    if not ok then return true end
-    return #parts == 0
-end
-
-local function FindSilentTarget()
-    local best, bestDist = nil, math.huge
-    local center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player == LocalPlayer then continue end
-        if SILENT_TEAM_CHECK and player.Team == LocalPlayer.Team then continue end
-        local char = player.Character
-        if not char then continue end
-        local humanoid = char:FindFirstChildOfClass("Humanoid")
-        if not humanoid or humanoid.Health <= 0 then continue end
-        local part = ResolveTargetPart(char, SILENT_TARGET_PART)
+local function getClosestTarget()
+    local closest, sDist = nil, math.huge
+    local cn = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+    for _, p in pairs(Players:GetPlayers()) do
+        if p == LocalPlayer then continue end
+        local c = p.Character
+        if not c then continue end
+        local hum = c:FindFirstChildOfClass("Humanoid")
+        if not hum or hum.Health <= 0 then continue end
+        local part = resolveTargetPart(c, Config.Aimbot.TargetPart)
         if not part then continue end
-        if SILENT_VISIBLE_CHECK and not SilentIsVisible(player, part) then continue end
-        local screenPos, onScreen = Camera:WorldToViewportPoint(part.Position)
-        if not onScreen then continue end
-        local dist = (Vector2.new(screenPos.X, screenPos.Y) - center).Magnitude
-        if dist <= SILENT_FOV and dist < bestDist then
-            best = part
-            bestDist = dist
-        end
+        if Config.Aimbot.VisibleOnly and not isVisible(c) then continue end
+        local sp, on = Camera:WorldToViewportPoint(part.Position)
+        if not on then continue end
+        local d = (Vector2.new(sp.X, sp.Y) - cn).Magnitude
+        if d < sDist and d <= Config.Aimbot.FOV then sDist = d; closest = part end
     end
-    return best
+    return closest
 end
 
--- ===== SILENT AIM HOOKS =====
-local mt = getrawmetatable(game)
-local oldIndex = mt.__index
-local oldNamecall = mt.__namecall
-setreadonly(mt, false)
-
-mt.__index = function(self, key)
-    if not checkcaller() and SILENT_ENABLED and self == Mouse and SelectedPart then
-        if key == "Hit" then
-            return SelectedPart.CFrame
-        elseif key == "Target" then
-            return SelectedPart
-        end
-    end
-    return oldIndex(self, key)
+local function doAimbot()
+    if not Config.Aimbot.Enabled then return end
+    if aiming and os.clock() - aimStartTime < Config.Aimbot.ReactionDelay then return end
+    local t = getClosestTarget()
+    if not t then return end
+    local la = math.clamp(0.825 - (Config.Aimbot.Smoothness * 0.075), 0.05, 1)
+    local jit = Config.Aimbot.AimJitter
+    local tp = t.Position + Vector3.new(
+        (math.random()-0.5)*jit,
+        (math.random()-0.5)*jit,
+        (math.random()-0.5)*jit
+    )
+    Camera.CFrame = Camera.CFrame:Lerp(CFrame.new(Camera.CFrame.Position, tp), la)
 end
 
-mt.__namecall = function(self, ...)
-    local method = getnamecallmethod()
-    if not checkcaller() and SILENT_ENABLED and SelectedPart then
-        if method == "Raycast" and self == Workspace then
-            local args = {...}
-            local origin = args[1]
-            local direction = args[2]
-            if origin and direction then
-                local newDir = (SelectedPart.Position - origin).Unit * direction.Magnitude
-                return oldNamecall(self, origin, newDir, select(3, ...))
-            end
-        end
-        if (method == "FindPartOnRayWithIgnoreList"
-        or method == "FindPartOnRayWithWhitelist") and self == Workspace then
-            local args = {...}
-            local ray = args[1]
-            if ray then
-                local newRay = Ray.new(
-                    ray.Origin,
-                    (SelectedPart.Position - ray.Origin).Unit * ray.Direction.Magnitude
-                )
-                return oldNamecall(self, newRay, select(2, ...))
-            end
-        end
-        if method == "FireServer" or method == "InvokeServer" then
-            local args = {...}
-            local changed = false
-            for i, arg in ipairs(args) do
-                if typeof(arg) == "CFrame" then
-                    args[i] = CFrame.new(arg.Position, SelectedPart.Position)
-                    changed = true
-                elseif typeof(arg) == "Vector3" then
-                    local dir = (SelectedPart.Position - Camera.CFrame.Position).Unit
-                    args[i] = dir * arg.Magnitude
-                    changed = true
-                elseif typeof(arg) == "Ray" then
-                    args[i] = Ray.new(
-                        arg.Origin,
-                        (SelectedPart.Position - arg.Origin).Unit * arg.Direction.Magnitude
-                    )
-                    changed = true
-                end
-            end
-            if changed then
-                return oldNamecall(self, table.unpack(args))
-            end
-        end
-    end
-    return oldNamecall(self, ...)
-end
-
-setreadonly(mt, true)
-
--- ===== FOV CIRCLE =====
 local function createFOVCircle()
     if FOVCircle then FOVCircle:Remove() end
     FOVCircle = Drawing.new("Circle")
-    FOVCircle.Thickness = math.max(1.5, 2*SCALE)
+    FOVCircle.Thickness = math.max(1, 1.5*SCALE)
     FOVCircle.NumSides = 60
-    FOVCircle.Radius = SILENT_FOV
+    FOVCircle.Radius = Config.Aimbot.FOV
     FOVCircle.Filled = false
-    FOVCircle.Color = Color3.fromRGB(0,255,200)
+    FOVCircle.Color = Color3.fromRGB(255,255,255) 
     FOVCircle.Transparency = 0.8
     FOVCircle.Visible = false
-    FOVCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
 end
 createFOVCircle()
 
--- ===== UI =====
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "NeutronRostAlpha"
+ScreenGui.Name = "Neutron I decay"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.IgnoreGuiInset = true
 ScreenGui.DisplayOrder = 999
 ScreenGui.Parent = (gethui and gethui()) or LocalPlayer:WaitForChild("PlayerGui")
 
+local CLR_BG = Color3.fromRGB(15, 15, 15)
+local CLR_TOP = Color3.fromRGB(25, 25, 25)
+local CLR_TAB_BG = Color3.fromRGB(20, 20, 20)
+local CLR_ELEM = Color3.fromRGB(30, 30, 30)
+local CLR_TOGGLE_OFF = Color3.fromRGB(50, 50, 50)
+local CLR_TOGGLE_ON = Color3.fromRGB(200, 200, 200)
+local CLR_TEXT = Color3.fromRGB(230, 230, 230)
+local CLR_TEXT_DARK = Color3.fromRGB(150, 150, 150)
+local CLR_ACCENT = Color3.fromRGB(255, 255, 255)
+
 local ToggleBtn = Instance.new("ImageButton")
 ToggleBtn.Size = UDim2.new(0, 46, 0, 46)
 ToggleBtn.Position = UDim2.new(0, 12, 0.4, 0)
-ToggleBtn.BackgroundColor3 = Color3.fromRGB(15,15,20)
+ToggleBtn.BackgroundColor3 = CLR_BG
 ToggleBtn.BorderSizePixel = 0
 ToggleBtn.Image = IMAGE_URL
 ToggleBtn.ScaleType = Enum.ScaleType.Fit
@@ -448,43 +406,43 @@ local tbCorner = Instance.new("UICorner")
 tbCorner.CornerRadius = UDim.new(1,0)
 tbCorner.Parent = ToggleBtn
 local tbStroke = Instance.new("UIStroke")
-tbStroke.Color = Color3.fromRGB(0,255,200)
+tbStroke.Color = CLR_ACCENT
 tbStroke.Thickness = 1.5
-tbStroke.Transparency = 0.3
+tbStroke.Transparency = 0.5
 tbStroke.Parent = ToggleBtn
 
 local Main = Instance.new("Frame")
-Main.Size = UDim2.new(0, 260, 0, 330)
-Main.Position = UDim2.new(0.5, -130, 0.5, -165)
-Main.BackgroundColor3 = Color3.fromRGB(15,15,20)
+Main.Size = UDim2.new(0, 260, 0, 360)
+Main.Position = UDim2.new(0.5, -130, 0.5, -180)
+Main.BackgroundColor3 = CLR_BG
 Main.BorderSizePixel = 0
 Main.Active = true
 Main.ClipsDescendants = true
 Main.Parent = ScreenGui
 
 local mainCorner = Instance.new("UICorner")
-mainCorner.CornerRadius = UDim.new(0,14)
+mainCorner.CornerRadius = UDim.new(0,12)
 mainCorner.Parent = Main
 local mainStroke = Instance.new("UIStroke")
-mainStroke.Color = Color3.fromRGB(0,255,200)
-mainStroke.Thickness = 1.5
-mainStroke.Transparency = 0.4
+mainStroke.Color = CLR_ACCENT
+mainStroke.Thickness = 1
+mainStroke.Transparency = 0.7
 mainStroke.Parent = Main
 
 local TopBar = Instance.new("Frame")
 TopBar.Size = UDim2.new(1, 0, 0, 42)
-TopBar.BackgroundColor3 = Color3.fromRGB(22,22,30)
+TopBar.BackgroundColor3 = CLR_TOP
 TopBar.BorderSizePixel = 0
 TopBar.Active = true
 TopBar.Parent = Main
 
 local topCorner = Instance.new("UICorner")
-topCorner.CornerRadius = UDim.new(0,14)
+topCorner.CornerRadius = UDim.new(0,12)
 topCorner.Parent = TopBar
 local topFix = Instance.new("Frame")
 topFix.Size = UDim2.new(1, 0, 0, 14)
 topFix.Position = UDim2.new(0, 0, 1, -14)
-topFix.BackgroundColor3 = Color3.fromRGB(22,22,30)
+topFix.BackgroundColor3 = CLR_TOP
 topFix.BorderSizePixel = 0
 topFix.Parent = TopBar
 
@@ -500,9 +458,9 @@ local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, -160, 1, 0)
 Title.Position = UDim2.new(0, 42, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "Neutron rost alpha"
-Title.TextColor3 = Color3.fromRGB(0,255,200)
-Title.TextSize = 13
+Title.Text = "NEUTRON I DECAY"
+Title.TextColor3 = CLR_ACCENT
+Title.TextSize = 15
 Title.Font = Enum.Font.GothamBold
 Title.TextXAlignment = Enum.TextXAlignment.Left
 Title.Parent = TopBar
@@ -525,7 +483,7 @@ MinimizeBtn.Position = UDim2.new(1, -84, 0.5, -15)
 MinimizeBtn.BackgroundTransparency = 1
 MinimizeBtn.BorderSizePixel = 0
 MinimizeBtn.Text = "-"
-MinimizeBtn.TextColor3 = Color3.fromRGB(200,200,200)
+MinimizeBtn.TextColor3 = CLR_TEXT_DARK
 MinimizeBtn.TextSize = 24
 MinimizeBtn.Font = Enum.Font.GothamBold
 MinimizeBtn.AutoButtonColor = false
@@ -534,12 +492,12 @@ MinimizeBtn.Parent = TopBar
 local TabsFrame = Instance.new("Frame")
 TabsFrame.Size = UDim2.new(0, 72, 1, -50)
 TabsFrame.Position = UDim2.new(0, 6, 0, 46)
-TabsFrame.BackgroundColor3 = Color3.fromRGB(18,18,24)
+TabsFrame.BackgroundColor3 = CLR_TAB_BG
 TabsFrame.BorderSizePixel = 0
 TabsFrame.Parent = Main
 
 local tabsCorner = Instance.new("UICorner")
-tabsCorner.CornerRadius = UDim.new(0,10)
+tabsCorner.CornerRadius = UDim.new(0,8)
 tabsCorner.Parent = TabsFrame
 
 local TabsList = Instance.new("UIListLayout")
@@ -627,23 +585,23 @@ end)
 local function makeTab(name)
     local btn = Instance.new("TextButton")
     btn.Size = UDim2.new(1, -10, 0, 34)
-    btn.BackgroundColor3 = Color3.fromRGB(25,25,33)
+    btn.BackgroundColor3 = CLR_ELEM
     btn.BorderSizePixel = 0
     btn.Text = name
-    btn.TextColor3 = Color3.fromRGB(200,200,200)
+    btn.TextColor3 = CLR_TEXT_DARK
     btn.TextSize = 13
     btn.Font = Enum.Font.GothamBold
     btn.AutoButtonColor = false
     btn.Parent = TabsFrame
     local c = Instance.new("UICorner")
-    c.CornerRadius = UDim.new(0,8)
+    c.CornerRadius = UDim.new(0,6)
     c.Parent = btn
     local page = Instance.new("ScrollingFrame")
     page.Size = UDim2.new(1, 0, 1, 0)
     page.BackgroundTransparency = 1
     page.BorderSizePixel = 0
     page.ScrollBarThickness = 3
-    page.ScrollBarImageColor3 = Color3.fromRGB(0,255,200)
+    page.ScrollBarImageColor3 = CLR_ACCENT
     page.CanvasSize = UDim2.new(0, 0, 0, 0)
     page.AutomaticCanvasSize = Enum.AutomaticSize.Y
     page.Visible = false
@@ -661,7 +619,7 @@ local function makeTab(name)
 end
 
 local Visual = makeTab("ESP")
-local Combat = makeTab("SILENT AIM")
+local Combat = makeTab("AIM")
 local Misc = makeTab("MISC")
 local allTabs = {Visual, Combat, Misc}
 
@@ -669,14 +627,14 @@ local function selectTab(tab)
     for _, t in pairs(allTabs) do
         t.Page.Visible = false
         TweenService:Create(t.Button, TweenInfo.new(0.15), {
-            BackgroundColor3 = Color3.fromRGB(25,25,33),
-            TextColor3 = Color3.fromRGB(200,200,200),
+            BackgroundColor3 = CLR_ELEM,
+            TextColor3 = CLR_TEXT_DARK,
         }):Play()
     end
     tab.Page.Visible = true
     TweenService:Create(tab.Button, TweenInfo.new(0.15), {
-        BackgroundColor3 = Color3.fromRGB(0,255,200),
-        TextColor3 = Color3.fromRGB(15,15,20),
+        BackgroundColor3 = CLR_TOGGLE_ON,
+        TextColor3 = CLR_BG,
     }):Play()
 end
 
@@ -688,18 +646,18 @@ selectTab(Visual)
 local function addToggle(parent, text, default, callback)
     local holder = Instance.new("Frame")
     holder.Size = UDim2.new(1, 0, 0, 34)
-    holder.BackgroundColor3 = Color3.fromRGB(22,22,30)
+    holder.BackgroundColor3 = CLR_ELEM
     holder.BorderSizePixel = 0
-    holder.Parent = parent.Page
+    holder.Parent = parent
     local hc = Instance.new("UICorner")
-    hc.CornerRadius = UDim.new(0,8)
+    hc.CornerRadius = UDim.new(0,6)
     hc.Parent = holder
     local lbl = Instance.new("TextLabel")
     lbl.Size = UDim2.new(1, -60, 1, 0)
     lbl.Position = UDim2.new(0, 10, 0, 0)
     lbl.BackgroundTransparency = 1
     lbl.Text = text
-    lbl.TextColor3 = Color3.fromRGB(220,220,220)
+    lbl.TextColor3 = CLR_TEXT
     lbl.TextSize = 12
     lbl.Font = Enum.Font.Gotham
     lbl.TextXAlignment = Enum.TextXAlignment.Left
@@ -707,7 +665,7 @@ local function addToggle(parent, text, default, callback)
     local toggle = Instance.new("TextButton")
     toggle.Size = UDim2.new(0, 40, 0, 20)
     toggle.Position = UDim2.new(1, -50, 0.5, -10)
-    toggle.BackgroundColor3 = Color3.fromRGB(40,40,50)
+    toggle.BackgroundColor3 = CLR_TOGGLE_OFF
     toggle.BorderSizePixel = 0
     toggle.Text = ""
     toggle.AutoButtonColor = false
@@ -718,7 +676,7 @@ local function addToggle(parent, text, default, callback)
     local knob = Instance.new("Frame")
     knob.Size = UDim2.new(0, 16, 0, 16)
     knob.Position = UDim2.new(0, 2, 0.5, -8)
-    knob.BackgroundColor3 = Color3.fromRGB(200,200,200)
+    knob.BackgroundColor3 = CLR_TEXT
     knob.BorderSizePixel = 0
     knob.Parent = toggle
     local kc = Instance.new("UICorner")
@@ -727,16 +685,16 @@ local function addToggle(parent, text, default, callback)
     local state = default or false
     local function refresh()
         if state then
-            TweenService:Create(toggle, TweenInfo.new(0.15), { BackgroundColor3 = Color3.fromRGB(0,255,200) }):Play()
+            TweenService:Create(toggle, TweenInfo.new(0.15), { BackgroundColor3 = CLR_TOGGLE_ON }):Play()
             TweenService:Create(knob, TweenInfo.new(0.15), {
                 Position = UDim2.new(1, -18, 0.5, -8),
-                BackgroundColor3 = Color3.fromRGB(15,15,20),
+                BackgroundColor3 = CLR_BG,
             }):Play()
         else
-            TweenService:Create(toggle, TweenInfo.new(0.15), { BackgroundColor3 = Color3.fromRGB(40,40,50) }):Play()
+            TweenService:Create(toggle, TweenInfo.new(0.15), { BackgroundColor3 = CLR_TOGGLE_OFF }):Play()
             TweenService:Create(knob, TweenInfo.new(0.15), {
                 Position = UDim2.new(0, 2, 0.5, -8),
-                BackgroundColor3 = Color3.fromRGB(200,200,200),
+                BackgroundColor3 = CLR_TEXT,
             }):Play()
         end
     end
@@ -751,18 +709,18 @@ end
 local function addSlider(parent, text, max, min, default, callback)
     local holder = Instance.new("Frame")
     holder.Size = UDim2.new(1, 0, 0, 48)
-    holder.BackgroundColor3 = Color3.fromRGB(22,22,30)
+    holder.BackgroundColor3 = CLR_ELEM
     holder.BorderSizePixel = 0
-    holder.Parent = parent.Page
+    holder.Parent = parent
     local hc = Instance.new("UICorner")
-    hc.CornerRadius = UDim.new(0,8)
+    hc.CornerRadius = UDim.new(0,6)
     hc.Parent = holder
     local lbl = Instance.new("TextLabel")
     lbl.Size = UDim2.new(1, -60, 0, 20)
     lbl.Position = UDim2.new(0, 10, 0, 4)
     lbl.BackgroundTransparency = 1
     lbl.Text = text
-    lbl.TextColor3 = Color3.fromRGB(220,220,220)
+    lbl.TextColor3 = CLR_TEXT
     lbl.TextSize = 12
     lbl.Font = Enum.Font.Gotham
     lbl.TextXAlignment = Enum.TextXAlignment.Left
@@ -772,7 +730,7 @@ local function addSlider(parent, text, max, min, default, callback)
     valLbl.Position = UDim2.new(1, -56, 0, 4)
     valLbl.BackgroundTransparency = 1
     valLbl.Text = tostring(default)
-    valLbl.TextColor3 = Color3.fromRGB(0,255,200)
+    valLbl.TextColor3 = CLR_ACCENT
     valLbl.TextSize = 12
     valLbl.Font = Enum.Font.GothamBold
     valLbl.TextXAlignment = Enum.TextXAlignment.Right
@@ -780,7 +738,7 @@ local function addSlider(parent, text, max, min, default, callback)
     local bar = Instance.new("Frame")
     bar.Size = UDim2.new(1, -20, 0, 6)
     bar.Position = UDim2.new(0, 10, 0, 30)
-    bar.BackgroundColor3 = Color3.fromRGB(40,40,50)
+    bar.BackgroundColor3 = CLR_TOGGLE_OFF
     bar.BorderSizePixel = 0
     bar.Parent = holder
     local bc = Instance.new("UICorner")
@@ -788,7 +746,7 @@ local function addSlider(parent, text, max, min, default, callback)
     bc.Parent = bar
     local fill = Instance.new("Frame")
     fill.Size = UDim2.new((default - min) / (max - min), 0, 1, 0)
-    fill.BackgroundColor3 = Color3.fromRGB(0,255,200)
+    fill.BackgroundColor3 = CLR_ACCENT
     fill.BorderSizePixel = 0
     fill.Parent = bar
     local fc = Instance.new("UICorner")
@@ -816,34 +774,160 @@ local function addSlider(parent, text, max, min, default, callback)
     end)
 end
 
-addToggle(Visual, "ESP Enabled", false, function(s) Config.ESP.Enabled = s end)
-addToggle(Visual, "Box", true, function(s) Config.ESP.Box = s end)
-addToggle(Visual, "Name", false, function(s) Config.ESP.Name = s end)
-addToggle(Visual, "Distance", false, function(s) Config.ESP.Distance = s end)
-addToggle(Visual, "Health Bar", false, function(s) Config.ESP.Health = s end)
-addToggle(Visual, "Tracer", false, function(s) Config.ESP.Tracer = s end)
-addToggle(Visual, "Skeleton", false, function(s) Config.ESP.Skeleton = s end)
-addToggle(Visual, "Head Circle", false, function(s) Config.ESP.Head = s end)
-addSlider(Visual, "Max Distance", 2000, 50, 500, function(v) Config.ESP.MaxDistance = v end)
+local function addDropdown(parent, text, options, callback)
+    local holder = Instance.new("Frame")
+    holder.Size = UDim2.new(1, 0, 0, 34)
+    holder.BackgroundColor3 = CLR_ELEM
+    holder.BorderSizePixel = 0
+    holder.ClipsDescendants = true
+    holder.Parent = parent
+    local hc = Instance.new("UICorner")
+    hc.CornerRadius = UDim.new(0,6)
+    hc.Parent = holder
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, 0, 0, 34)
+    btn.BackgroundTransparency = 1
+    btn.Text = text .. ": " .. options[1]
+    btn.TextColor3 = CLR_TEXT
+    btn.TextSize = 12
+    btn.Font = Enum.Font.Gotham
+    btn.TextXAlignment = Enum.TextXAlignment.Left
+    btn.Parent = holder
+    local pad = Instance.new("UIPadding")
+    pad.PaddingLeft = UDim.new(0, 10)
+    pad.Parent = btn
+    local open = false
+    btn.MouseButton1Click:Connect(function()
+        open = not open
+        holder.Size = open and UDim2.new(1, 0, 0, 34 + #options * 26) or UDim2.new(1, 0, 0, 34)
+    end)
+    for i, opt in ipairs(options) do
+        local ob = Instance.new("TextButton")
+        ob.Size = UDim2.new(1, -10, 0, 24)
+        ob.Position = UDim2.new(0, 5, 0, 34 + (i - 1) * 26)
+        ob.BackgroundColor3 = CLR_TOP
+        ob.BorderSizePixel = 0
+        ob.Text = opt
+        ob.TextColor3 = CLR_TEXT_DARK
+        ob.TextSize = 11
+        ob.Font = Enum.Font.Gotham
+        ob.Parent = holder
+        local oc = Instance.new("UICorner")
+        oc.CornerRadius = UDim.new(0,6)
+        oc.Parent = ob
+        ob.MouseButton1Click:Connect(function()
+            btn.Text = text .. ": " .. opt
+            open = false
+            holder.Size = UDim2.new(1, 0, 0, 34)
+            if callback then callback(opt) end
+        end)
+    end
+end
 
-addToggle(Combat, "Silent Aim Enabled", false, function(s)
-    SILENT_ENABLED = s
+local SubTabsFrame = Instance.new("Frame")
+SubTabsFrame.Size = UDim2.new(1, 0, 0, 30)
+SubTabsFrame.BackgroundTransparency = 1
+SubTabsFrame.Parent = Visual.Page
+SubTabsFrame.LayoutOrder = -1
+
+local SubPlayersBtn = Instance.new("TextButton")
+SubPlayersBtn.Size = UDim2.new(0.5, -2, 1, 0)
+SubPlayersBtn.Position = UDim2.new(0, 0, 0, 0)
+SubPlayersBtn.BackgroundColor3 = CLR_TOGGLE_ON
+SubPlayersBtn.BorderSizePixel = 0
+SubPlayersBtn.Text = "Players"
+SubPlayersBtn.TextColor3 = CLR_BG
+SubPlayersBtn.Font = Enum.Font.GothamBold
+SubPlayersBtn.TextSize = 12
+SubPlayersBtn.Parent = SubTabsFrame
+local spc = Instance.new("UICorner")
+spc.CornerRadius = UDim.new(0,6)
+spc.Parent = SubPlayersBtn
+
+local SubOtherBtn = Instance.new("TextButton")
+SubOtherBtn.Size = UDim2.new(0.5, -2, 1, 0)
+SubOtherBtn.Position = UDim2.new(0.5, 2, 0, 0)
+SubOtherBtn.BackgroundColor3 = CLR_ELEM
+SubOtherBtn.BorderSizePixel = 0
+SubOtherBtn.Text = "Other"
+SubOtherBtn.TextColor3 = CLR_TEXT_DARK
+SubOtherBtn.Font = Enum.Font.GothamBold
+SubOtherBtn.TextSize = 12
+SubOtherBtn.Parent = SubTabsFrame
+local soc = Instance.new("UICorner")
+soc.CornerRadius = UDim.new(0,6)
+soc.Parent = SubOtherBtn
+
+local PagePlayers = Instance.new("Frame")
+PagePlayers.Size = UDim2.new(1, 0, 1, -35)
+PagePlayers.Position = UDim2.new(0, 0, 0, 35)
+PagePlayers.BackgroundTransparency = 1
+PagePlayers.Parent = Visual.Page
+local pplLayout = Instance.new("UIListLayout")
+pplLayout.Padding = UDim.new(0, 5)
+pplLayout.SortOrder = Enum.SortOrder.LayoutOrder
+pplLayout.Parent = PagePlayers
+
+local PageOther = Instance.new("Frame")
+PageOther.Size = UDim2.new(1, 0, 1, -35)
+PageOther.Position = UDim2.new(0, 0, 0, 35)
+PageOther.BackgroundTransparency = 1
+PageOther.Visible = false
+PageOther.Parent = Visual.Page
+local othLayout = Instance.new("UIListLayout")
+othLayout.Padding = UDim.new(0, 5)
+othLayout.SortOrder = Enum.SortOrder.LayoutOrder
+othLayout.Parent = PageOther
+
+SubPlayersBtn.MouseButton1Click:Connect(function()
+    PagePlayers.Visible = true
+    PageOther.Visible = false
+    TweenService:Create(SubPlayersBtn, TweenInfo.new(0.15), {BackgroundColor3 = CLR_TOGGLE_ON, TextColor3 = CLR_BG}):Play()
+    TweenService:Create(SubOtherBtn, TweenInfo.new(0.15), {BackgroundColor3 = CLR_ELEM, TextColor3 = CLR_TEXT_DARK}):Play()
+end)
+
+SubOtherBtn.MouseButton1Click:Connect(function()
+    PagePlayers.Visible = false
+    PageOther.Visible = true
+    TweenService:Create(SubOtherBtn, TweenInfo.new(0.15), {BackgroundColor3 = CLR_TOGGLE_ON, TextColor3 = CLR_BG}):Play()
+    TweenService:Create(SubPlayersBtn, TweenInfo.new(0.15), {BackgroundColor3 = CLR_ELEM, TextColor3 = CLR_TEXT_DARK}):Play()
+end)
+
+addToggle(PagePlayers, "ESP Enabled", false, function(s) Config.ESP.Enabled = s end)
+addToggle(PagePlayers, "Box", true, function(s) Config.ESP.Box = s end)
+addToggle(PagePlayers, "Name", false, function(s) Config.ESP.Name = s end)
+addToggle(PagePlayers, "Distance", false, function(s) Config.ESP.Distance = s end)
+addToggle(PagePlayers, "Health Bar", false, function(s) Config.ESP.Health = s end)
+addToggle(PagePlayers, "Tracer", false, function(s) Config.ESP.Tracer = s end)
+addToggle(PagePlayers, "Skeleton", false, function(s) Config.ESP.Skeleton = s end)
+addToggle(PagePlayers, "Head Circle", false, function(s) Config.ESP.Head = s end)
+addToggle(PagePlayers, "Visible Check", false, function(s) Config.ESP.VisibleCheck = s end)
+addSlider(PagePlayers, "Max Distance", 2000, 50, 500, function(v) Config.ESP.MaxDistance = v end)
+
+addToggle(PageOther, "Item ESP", false, function(s) Config.ESP.ItemEnabled = s end)
+addToggle(PageOther, "Item Name", true, function(s) Config.ESP.ItemName = s end)
+addToggle(PageOther, "Item Distance", false, function(s) Config.ESP.ItemDistance = s end)
+
+addToggle(Combat.Page, "Aimbot Enabled", false, function(s)
+    Config.Aimbot.Enabled = s
     if FOVCircle then FOVCircle.Visible = s end
 end)
-addToggle(Combat, "Visible Only", false, function(s) SILENT_VISIBLE_CHECK = s end)
-addSlider(Combat, "FOV", 200, 30, 150, function(v)
-    SILENT_FOV = v
+addToggle(Combat.Page, "Visible Only", true, function(s) Config.Aimbot.VisibleOnly = s end)
+addSlider(Combat.Page, "Smoothness", 10, 1, 8, function(v) Config.Aimbot.Smoothness = v end)
+addSlider(Combat.Page, "FOV", 200, 30, 60, function(v)
+    Config.Aimbot.FOV = v
     if FOVCircle then FOVCircle.Radius = v end
 end)
+addDropdown(Combat.Page, "Target", {"Torso", "Head"}, function(v) Config.Aimbot.TargetPart = v end)
 
 local TgHolder = Instance.new("Frame")
 TgHolder.Size = UDim2.new(1, 0, 0, 96)
-TgHolder.BackgroundColor3 = Color3.fromRGB(22,22,30)
+TgHolder.BackgroundColor3 = CLR_ELEM
 TgHolder.BorderSizePixel = 0
 TgHolder.Parent = Misc.Page
 
 local tghc = Instance.new("UICorner")
-tghc.CornerRadius = UDim.new(0,8)
+tghc.CornerRadius = UDim.new(0,6)
 tghc.Parent = TgHolder
 
 local TgLabel = Instance.new("TextLabel")
@@ -851,7 +935,7 @@ TgLabel.Size = UDim2.new(1, -20, 0, 18)
 TgLabel.Position = UDim2.new(0, 10, 0, 6)
 TgLabel.BackgroundTransparency = 1
 TgLabel.Text = "Support author:"
-TgLabel.TextColor3 = Color3.fromRGB(220,220,220)
+TgLabel.TextColor3 = CLR_TEXT
 TgLabel.TextSize = 12
 TgLabel.Font = Enum.Font.Gotham
 TgLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -860,10 +944,10 @@ TgLabel.Parent = TgHolder
 local TgLink = Instance.new("TextButton")
 TgLink.Size = UDim2.new(1, -20, 0, 26)
 TgLink.Position = UDim2.new(0, 10, 0, 28)
-TgLink.BackgroundColor3 = Color3.fromRGB(30,30,40)
+TgLink.BackgroundColor3 = CLR_TOP
 TgLink.BorderSizePixel = 0
 TgLink.Text = TG_LINK
-TgLink.TextColor3 = Color3.fromRGB(0,255,200)
+TgLink.TextColor3 = CLR_ACCENT
 TgLink.TextSize = 13
 TgLink.Font = Enum.Font.GothamBold
 TgLink.AutoButtonColor = false
@@ -878,7 +962,7 @@ TgHint.Size = UDim2.new(1, -20, 0, 18)
 TgHint.Position = UDim2.new(0, 10, 0, 58)
 TgHint.BackgroundTransparency = 1
 TgHint.Text = "(tap to copy)"
-TgHint.TextColor3 = Color3.fromRGB(150,150,165)
+TgHint.TextColor3 = CLR_TEXT_DARK
 TgHint.TextSize = 11
 TgHint.Font = Enum.Font.Gotham
 TgHint.TextXAlignment = Enum.TextXAlignment.Center
@@ -889,7 +973,7 @@ TgNotify.Size = UDim2.new(1, -20, 0, 18)
 TgNotify.Position = UDim2.new(0, 10, 0, 58)
 TgNotify.BackgroundTransparency = 1
 TgNotify.Text = ""
-TgNotify.TextColor3 = Color3.fromRGB(0,255,200)
+TgNotify.TextColor3 = CLR_ACCENT
 TgNotify.TextSize = 11
 TgNotify.Font = Enum.Font.GothamBold
 TgNotify.TextXAlignment = Enum.TextXAlignment.Center
@@ -907,10 +991,8 @@ TgLink.MouseButton1Click:Connect(function()
     TgHint.Visible = false
     if c then
         TgNotify.Text = "Copied!"
-        TgNotify.TextColor3 = Color3.fromRGB(0,255,200)
     else
         TgNotify.Text = "Copy failed"
-        TgNotify.TextColor3 = Color3.fromRGB(255,90,90)
     end
     pcall(function()
         game:GetService("GuiService"):OpenBrowserWindow("https://www.google.com/url?q=https://" .. TG_LINK)
@@ -922,25 +1004,25 @@ TgLink.MouseButton1Click:Connect(function()
 end)
 TgLink.MouseEnter:Connect(function()
     TweenService:Create(TgLink, TweenInfo.new(0.15), {
-        BackgroundColor3 = Color3.fromRGB(0,255,200),
-        TextColor3 = Color3.fromRGB(15,15,20),
+        BackgroundColor3 = CLR_ACCENT,
+        TextColor3 = CLR_BG,
     }):Play()
 end)
 TgLink.MouseLeave:Connect(function()
     TweenService:Create(TgLink, TweenInfo.new(0.15), {
-        BackgroundColor3 = Color3.fromRGB(30,30,40),
-        TextColor3 = Color3.fromRGB(0,255,200),
+        BackgroundColor3 = CLR_TOP,
+        TextColor3 = CLR_ACCENT,
     }):Play()
 end)
 
 local InfoHolder = Instance.new("Frame")
 InfoHolder.Size = UDim2.new(1, 0, 0, 96)
-InfoHolder.BackgroundColor3 = Color3.fromRGB(22,22,30)
+InfoHolder.BackgroundColor3 = CLR_ELEM
 InfoHolder.BorderSizePixel = 0
 InfoHolder.Parent = Misc.Page
 
 local ihc = Instance.new("UICorner")
-ihc.CornerRadius = UDim.new(0,8)
+ihc.CornerRadius = UDim.new(0,6)
 ihc.Parent = InfoHolder
 
 local InfoTitle = Instance.new("TextLabel")
@@ -948,7 +1030,7 @@ InfoTitle.Size = UDim2.new(1, -20, 0, 18)
 InfoTitle.Position = UDim2.new(0, 10, 0, 6)
 InfoTitle.BackgroundTransparency = 1
 InfoTitle.Text = "Info:"
-InfoTitle.TextColor3 = Color3.fromRGB(220,220,220)
+InfoTitle.TextColor3 = CLR_TEXT
 InfoTitle.TextSize = 12
 InfoTitle.Font = Enum.Font.Gotham
 InfoTitle.TextXAlignment = Enum.TextXAlignment.Left
@@ -959,7 +1041,7 @@ ResLbl.Size = UDim2.new(1, -20, 0, 20)
 ResLbl.Position = UDim2.new(0, 10, 0, 26)
 ResLbl.BackgroundTransparency = 1
 ResLbl.Text = "Resolution:"
-ResLbl.TextColor3 = Color3.fromRGB(200,200,200)
+ResLbl.TextColor3 = CLR_TEXT_DARK
 ResLbl.TextSize = 12
 ResLbl.Font = Enum.Font.Gotham
 ResLbl.TextXAlignment = Enum.TextXAlignment.Left
@@ -970,7 +1052,7 @@ ResValue.Size = UDim2.new(0, 100, 0, 20)
 ResValue.Position = UDim2.new(1, -110, 0, 26)
 ResValue.BackgroundTransparency = 1
 ResValue.Text = "0x0"
-ResValue.TextColor3 = Color3.fromRGB(0,255,200)
+ResValue.TextColor3 = CLR_ACCENT
 ResValue.TextSize = 12
 ResValue.Font = Enum.Font.GothamBold
 ResValue.TextXAlignment = Enum.TextXAlignment.Right
@@ -981,7 +1063,7 @@ FpsLbl.Size = UDim2.new(1, -20, 0, 20)
 FpsLbl.Position = UDim2.new(0, 10, 0, 46)
 FpsLbl.BackgroundTransparency = 1
 FpsLbl.Text = "FPS:"
-FpsLbl.TextColor3 = Color3.fromRGB(200,200,200)
+FpsLbl.TextColor3 = CLR_TEXT_DARK
 FpsLbl.TextSize = 12
 FpsLbl.Font = Enum.Font.Gotham
 FpsLbl.TextXAlignment = Enum.TextXAlignment.Left
@@ -992,7 +1074,7 @@ FpsValue.Size = UDim2.new(0, 100, 0, 20)
 FpsValue.Position = UDim2.new(1, -110, 0, 46)
 FpsValue.BackgroundTransparency = 1
 FpsValue.Text = "0"
-FpsValue.TextColor3 = Color3.fromRGB(0,255,200)
+FpsValue.TextColor3 = CLR_ACCENT
 FpsValue.TextSize = 12
 FpsValue.Font = Enum.Font.GothamBold
 FpsValue.TextXAlignment = Enum.TextXAlignment.Right
@@ -1003,7 +1085,7 @@ PingLbl.Size = UDim2.new(1, -20, 0, 20)
 PingLbl.Position = UDim2.new(0, 10, 0, 66)
 PingLbl.BackgroundTransparency = 1
 PingLbl.Text = "Ping:"
-PingLbl.TextColor3 = Color3.fromRGB(200,200,200)
+PingLbl.TextColor3 = CLR_TEXT_DARK
 PingLbl.TextSize = 12
 PingLbl.Font = Enum.Font.Gotham
 PingLbl.TextXAlignment = Enum.TextXAlignment.Left
@@ -1014,7 +1096,7 @@ PingValue.Size = UDim2.new(0, 100, 0, 20)
 PingValue.Position = UDim2.new(1, -110, 0, 66)
 PingValue.BackgroundTransparency = 1
 PingValue.Text = "0 ms"
-PingValue.TextColor3 = Color3.fromRGB(0,255,200)
+PingValue.TextColor3 = CLR_ACCENT
 PingValue.TextSize = 12
 PingValue.Font = Enum.Font.GothamBold
 PingValue.TextXAlignment = Enum.TextXAlignment.Right
@@ -1065,7 +1147,7 @@ local function setOpen(state)
         Main.Visible = true
         Main.Size = UDim2.new(0, 0, 0, 0)
         TweenService:Create(Main, TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-            Size = UDim2.new(0, 260, 0, 330)
+            Size = UDim2.new(0, 260, 0, 360)
         }):Play()
     else
         local t = TweenService:Create(Main, TweenInfo.new(0.15), { Size = UDim2.new(0, 0, 0, 0) })
@@ -1083,7 +1165,7 @@ local function fullyClose()
         Main.Visible = false
         if ToggleBtn then ToggleBtn.Visible = false end
         Config.ESP.Enabled = false
-        SILENT_ENABLED = false
+        Config.Aimbot.Enabled = false
         if FOVCircle then FOVCircle.Visible = false end
         for _, obj in pairs(ESPObjects) do hideAll(obj) end
     end)
@@ -1099,8 +1181,8 @@ MinimizeBtn.MouseButton1Click:Connect(function()
     if CompletelyClosed then return end
     setOpen(false)
 end)
-MinimizeBtn.MouseEnter:Connect(function() MinimizeBtn.TextColor3 = Color3.fromRGB(0,255,200) end)
-MinimizeBtn.MouseLeave:Connect(function() MinimizeBtn.TextColor3 = Color3.fromRGB(200,200,200) end)
+MinimizeBtn.MouseEnter:Connect(function() MinimizeBtn.TextColor3 = CLR_ACCENT end)
+MinimizeBtn.MouseLeave:Connect(function() MinimizeBtn.TextColor3 = CLR_TEXT_DARK end)
 CloseBtn.MouseButton1Click:Connect(function() fullyClose() end)
 CloseBtn.MouseEnter:Connect(function() CloseBtn.TextColor3 = Color3.fromRGB(255,30,30) end)
 CloseBtn.MouseLeave:Connect(function() CloseBtn.TextColor3 = Color3.fromRGB(255,90,90) end)
@@ -1112,14 +1194,43 @@ Players.PlayerRemoving:Connect(removeESP)
 RunService.RenderStepped:Connect(function()
     if CompletelyClosed then return end
     updateESP()
-    if SILENT_ENABLED then
-        SelectedPart = FindSilentTarget()
-    else
-        SelectedPart = nil
-    end
+    doAimbot()
+    
     if FOVCircle and FOVCircle.Visible then
         FOVCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+        
+        -- Логика цвета FOV
+        if Config.ESP.VisibleCheck then
+            local hasVisibleTarget = false
+            local screenCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+            
+            for _, p in pairs(Players:GetPlayers()) do
+                if p ~= LocalPlayer and p.Character then
+                    local part = resolveTargetPart(p.Character, Config.Aimbot.TargetPart)
+                    if part then
+                        local sp, onScreen = Camera:WorldToViewportPoint(part.Position)
+                        if onScreen then
+                            local dist = (Vector2.new(sp.X, sp.Y) - screenCenter).Magnitude
+                            if dist <= Config.Aimbot.FOV then
+                                if isVisible(p.Character) then
+                                    hasVisibleTarget = true
+                                    break 
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+            
+            if hasVisibleTarget then
+                FOVCircle.Color = Color3.fromRGB(0, 255, 0)
+            else
+                FOVCircle.Color = Color3.fromRGB(255, 0, 0)
+            end
+        else
+            FOVCircle.Color = Color3.fromRGB(255, 255, 255)
+        end
     end
 end)
 
-print("Neutron rost alpha loaded!")
+print("NEUTRON I DECAY loaded!")
