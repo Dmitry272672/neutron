@@ -11,14 +11,13 @@ local IMAGE_URL = "rbxassetid://138823883244540"
 local TG_LINK = "t.me/Neutron016"
 
 -- ============================================================
--- КЛЮЧЕВЫЕ СЛОВА ДЛЯ АВТОПОИСКА (НЕ НУЖНО КОПАТЬСЯ В ИГРЕ)
--- Скрипт найдет объект, если в его названии есть ОДНО из этих слов
+-- КЛЮЧЕВЫЕ СЛОВА (исправленные)
 -- ============================================================
 local KEYWORDS = {
-    Closet = {"Closet", "Wardrobe", "Locker", "Cabinet"},
-    Chest = {"Chest", "Crate", "Box", "Loot", "Container"},
-    Sleeping = {"Sleep", "Bed", "Sleeping"},
-    Dead = {"Dead", "Body", "Corpse", "Death"}
+    Closet = {"Closet", "Wardrobe"},
+    Chest = {"Chest", "Crate"},
+    Sleeping = {"Sleep", "Sleeping"},
+    Dead = {"Dead", "Corpse"}
 }
 -- ============================================================
 
@@ -63,9 +62,6 @@ local CompletelyClosed = false
 local aimStartTime = 0
 local aiming = false
 
--- ==========================================
--- СИСТЕМА УМНОГО ПОИСКА ОБЪЕКТОВ
--- ==========================================
 local function checkKeywords(name, keywordList)
     local lowerName = string.lower(name)
     for _, kw in ipairs(keywordList) do
@@ -76,6 +72,7 @@ local function checkKeywords(name, keywordList)
     return false
 end
 
+-- Умный поиск и подсветка
 local function scanAndHighlight()
     for category, keywords in pairs(KEYWORDS) do
         if Config.ESP[category] then
@@ -84,35 +81,82 @@ local function scanAndHighlight()
             end
 
             for _, v in pairs(Workspace:GetDescendants()) do
-                -- Проверяем только модели и части
-                if (v:IsA("Model") or v:IsA("BasePart")) and checkKeywords(v.Name, keywords) then
-                    -- Если объект еще не подсвечен
-                    if not v:FindFirstChild("ESP_HL_" .. category) then
-                        local hl = Instance.new("Highlight")
-                        hl.Name = "ESP_HL_" .. category
-                        hl.Adornee = v
-                        hl.Parent = v
-                        hl.FillColor = Color3.fromRGB(255, 255, 0) -- Желтый
-                        hl.OutlineColor = Color3.fromRGB(255, 255, 255)
-                        hl.FillTransparency = 0.5
-                        hl.OutlineTransparency = 0
-                        table.insert(ObjectESP[category].Instances, hl)
+                -- Игнорируем папки, скрипты, эффекты и т.д. 
+                -- Берем только Модели и Базовые Части
+                if (v:IsA("Model") or v:IsA("BasePart")) then
+                    
+                    -- Проверяем, не является ли объект игроком (чтобы не светить их как "спящих" или "трупы")
+                    local isCharacter = v.Parent and v.Parent:FindFirstChildOfClass("Humanoid") or v:FindFirstChildOfClass("Humanoid")
 
-                        -- Создаем бокс и текст на экране
-                        local box = Drawing.new("Square")
-                        box.Thickness = 1
-                        box.Color = Color3.fromRGB(255, 255, 0) -- Желтый
-                        box.Filled = false
-                        box.Visible = false
-                        
-                        local txt = Drawing.new("Text")
-                        txt.Size = 14
-                        txt.Center = true
-                        txt.Outline = true
-                        txt.Color = Color3.fromRGB(255, 255, 0)
-                        txt.Visible = false
-                        
-                        table.insert(ObjectESP[category].Boxes, {instance = v, box = box, text = txt})
+                    -- ЛОГИКА ДЛЯ СУНДУКОВ И ШКАФОВ
+                    if (category == "Chest" or category == "Closet") then
+                        if not isCharacter and checkKeywords(v.Name, keywords) then
+                            if not v:FindFirstChild("ESP_HL_" .. category) then
+                                local hl = Instance.new("Highlight")
+                                hl.Name = "ESP_HL_" .. category
+                                hl.Adornee = v
+                                hl.Parent = v
+                                hl.FillColor = category == "Chest" and Color3.fromRGB(255, 165, 0) or Color3.fromRGB(0, 255, 255)
+                                hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+                                hl.FillTransparency = 0.5
+                                hl.OutlineTransparency = 0
+                                table.insert(ObjectESP[category].Instances, hl)
+
+                                local box = Drawing.new("Square")
+                                box.Thickness = 1
+                                box.Color = category == "Chest" and Color3.fromRGB(255, 165, 0) or Color3.fromRGB(0, 255, 255)
+                                box.Filled = false
+                                box.Visible = false
+                                
+                                local txt = Drawing.new("Text")
+                                txt.Size = 14
+                                txt.Center = true
+                                txt.Outline = true
+                                txt.Color = category == "Chest" and Color3.fromRGB(255, 165, 0) or Color3.fromRGB(0, 255, 255)
+                                txt.Visible = false
+                                
+                                table.insert(ObjectESP[category].Boxes, {instance = v, box = box, text = txt})
+                            end
+                        end
+                    end
+                    
+                    -- ЛОГИКА ДЛЯ СПЯЩИХ (Ищем игроков с ключевыми словами в статусе или имени)
+                    if category == "Sleeping" then
+                        if isCharacter and checkKeywords(v.Name, keywords) then
+                             -- Дополнительная проверка: игрок должен быть "спящим" (например, лежать)
+                             -- (Это можно адаптировать под игру)
+                             if not v:FindFirstChild("ESP_HL_" .. category) then
+                                local hl = Instance.new("Highlight")
+                                hl.Name = "ESP_HL_" .. category
+                                hl.Adornee = v
+                                hl.Parent = v
+                                hl.FillColor = Color3.fromRGB(150, 0, 255)
+                                hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+                                hl.FillTransparency = 0.5
+                                hl.OutlineTransparency = 0
+                                table.insert(ObjectESP[category].Instances, hl)
+                             end
+                        end
+                    end
+
+                    -- ЛОГИКА ДЛЯ УМЕРШИХ (Ищем тела)
+                    if category == "Dead" then
+                        if isCharacter then
+                            local hum = v:FindFirstChildOfClass("Humanoid")
+                            if hum and hum.Health <= 0 then
+                                if not v:FindFirstChild("ESP_HL_" .. category) then
+                                    local hl = Instance.new("Highlight")
+                                    hl.Name = "ESP_HL_" .. category
+                                    hl.Adornee = v
+                                    hl.Parent = v
+                                    hl.FillColor = Color3.fromRGB(255, 0, 0)
+                                    hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+                                    hl.FillTransparency = 0.5
+                                    hl.OutlineTransparency = 0
+                                    table.insert(ObjectESP[category].Instances, hl)
+                                end
+                            end
+                        end
                     end
                 end
             end
@@ -123,7 +167,6 @@ end
 local function updateObjectESP()
     for category, data in pairs(ObjectESP) do
         if not Config.ESP[category] then
-            -- Если выключили, удаляем подсветку
             for _, hl in pairs(data.Instances) do
                 if hl and hl.Parent then hl:Destroy() end
             end
@@ -133,8 +176,8 @@ local function updateObjectESP()
             end
             ObjectESP[category] = nil
         else
-            -- Отрисовка боксов
-            for _, b in pairs(data.Boxes) do
+            -- Отрисовка боксов (если нужно)
+            for _, b in pairs(data.Boxes or {}) do
                 local v = b.instance
                 if v and v.Parent then
                     local pos = nil
@@ -908,7 +951,7 @@ addToggle(Visual.Page, "Head Circle", false, function(s) Config.ESP.Head = s end
 addToggle(Visual.Page, "Show Distance", false, function(s) Config.ESP.Distance = s end)
 addSlider(Visual.Page, "ESP Distance", 2000, 0, 1000, function(v) Config.ESP.MaxDistance = v end)
 
--- ESP Объекты
+-- ESP Объекты (в этой же вкладке)
 addToggle(Visual.Page, "ESP Closet", false, function(s) Config.ESP.Closet = s end)
 addToggle(Visual.Page, "ESP Chest", false, function(s) Config.ESP.Chest = s end)
 addToggle(Visual.Page, "ESP Sleeping", false, function(s) Config.ESP.Sleeping = s end)
