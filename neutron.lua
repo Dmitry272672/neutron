@@ -11,13 +11,13 @@ local IMAGE_URL = "rbxassetid://138823883244540"
 local TG_LINK = "t.me/Neutron016"
 
 -- ============================================================
--- НАСТРОЙКА ОБЪЕКТОВ ДЛЯ ESP (ЗАМЕНИ НАЗВАНИЯ ПОД СВОЮ ИГРУ)
+-- НАСТРОЙКА ОБЪЕКТОВ ДЛЯ ESP (ЗАМЕНИ НАЗВАНИЯ ПОД DECAY RUST)
 -- ============================================================
 local OBJECT_NAMES = {
-    Closet = "Closet",   -- Название объекта шкафа в игре
-    Chest = "Chest",     -- Название объекта сундука
-    Sleeping = "Sleeping", -- Название объекта спящего
-    Dead = "Dead"        -- Название объекта умершего
+    Closet = "Closet",   -- Название шкафа в игре
+    Chest = "Chest",     -- Название сундука
+    Sleeping = "Sleeping", -- Название спящего
+    Dead = "Dead"        -- Название умершего
 }
 -- ============================================================
 
@@ -296,63 +296,17 @@ local function updateESP()
     end
 end
 
-local function updateObjectESP()
-    for name, obj in pairs(ObjectESP) do
-        if not obj.Enabled or not obj.Instance or not obj.Instance.Parent then
-            if obj.Box then obj.Box:Remove() end
-            if obj.Text then obj.Text:Remove() end
-            ObjectESP[name] = nil
-        else
-            local instance = obj.Instance
-            local pos = nil
-            if instance:IsA("Model") then
-                pos = instance:FindFirstChild("HumanoidRootPart") and instance.HumanoidRootPart.Position or (instance.PrimaryPart and instance.PrimaryPart.Position)
-            elseif instance:IsA("BasePart") then
-                pos = instance.Position
-            end
-
-            if pos then
-                local sp, onScreen = Camera:WorldToViewportPoint(pos)
-                if onScreen then
-                    local dist = (Camera.CFrame.Position - pos).Magnitude
-                    if dist <= Config.ESP.MaxDistance then
-                        local text = string.format("%s [%d m]", name, math.floor(dist))
-                        obj.Text.Text = text
-                        obj.Text.Position = Vector2.new(sp.X, sp.Y - 20)
-                        obj.Text.Visible = true
-                        
-                        obj.Box.Size = Vector2.new(40, 40)
-                        obj.Box.Position = Vector2.new(sp.X - 20, sp.Y - 20)
-                        obj.Box.Visible = true
-                    else
-                        obj.Text.Visible = false
-                        obj.Box.Visible = false
-                    end
-                else
-                    obj.Text.Visible = false
-                    obj.Box.Visible = false
-                end
-            end
-        end
-    end
-end
-
+-- ============================================================
+-- ЛОГИКА ДЛЯ ESP ОБЪЕКТОВ (Шкаф, Сундук, Спящий, Умерший)
+-- Использует Highlight для отображения модели сквозь стены
+-- ============================================================
 local function toggleObjectESP(name, enabled)
     if enabled then
         if not ObjectESP[name] then
             ObjectESP[name] = {
-                Box = Drawing.new("Square"),
-                Text = Drawing.new("Text"),
                 Enabled = true,
-                Instance = nil
+                Instances = {}
             }
-            ObjectESP[name].Box.Thickness = 1
-            ObjectESP[name].Box.Color = Color3.fromRGB(0, 255, 255)
-            ObjectESP[name].Box.Filled = false
-            ObjectESP[name].Text.Size = 14
-            ObjectESP[name].Text.Center = true
-            ObjectESP[name].Text.Outline = true
-            ObjectESP[name].Text.Color = Color3.fromRGB(0, 255, 255)
         else
             ObjectESP[name].Enabled = true
         end
@@ -361,20 +315,33 @@ local function toggleObjectESP(name, enabled)
             while ObjectESP[name] and ObjectESP[name].Enabled do
                 local targetName = OBJECT_NAMES[name]
                 for _, v in pairs(Workspace:GetDescendants()) do
-                    if v.Name == targetName then
-                        ObjectESP[name].Instance = v
-                        break
+                    if v.Name == targetName and not v:FindFirstChild("ESP_Highlight_" .. name) then
+                        local hl = Instance.new("Highlight")
+                        hl.Name = "ESP_Highlight_" .. name
+                        hl.Parent = v
+                        hl.FillColor = Color3.fromRGB(0, 255, 255) -- Голубой
+                        hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+                        hl.FillTransparency = 0.5
+                        hl.OutlineTransparency = 0
+                        table.insert(ObjectESP[name].Instances, hl)
                     end
                 end
-                task.wait(1)
+                task.wait(2)
             end
         end)
     else
         if ObjectESP[name] then
             ObjectESP[name].Enabled = false
+            for _, hl in pairs(ObjectESP[name].Instances) do
+                if hl and hl.Parent then
+                    hl:Destroy()
+                end
+            end
+            ObjectESP[name].Instances = {}
         end
     end
 end
+-- ============================================================
 
 local function getClosestTargetForSilentAim()
     local closest, sDist = nil, math.huge
@@ -1235,6 +1202,14 @@ local function fullyClose()
         Config.SilentAim.Enabled = false
         if FOVCircle then FOVCircle.Visible = false end
         for _, obj in pairs(ESPObjects) do hideAll(obj) end
+        -- Очистка Highlight
+        for _, obj in pairs(ObjectESP) do
+            if obj.Instances then
+                for _, hl in pairs(obj.Instances) do
+                    if hl and hl.Parent then hl:Destroy() end
+                end
+            end
+        end
     end)
 end
 
@@ -1261,7 +1236,6 @@ Players.PlayerRemoving:Connect(removeESP)
 RunService.RenderStepped:Connect(function()
     if CompletelyClosed then return end
     updateESP()
-    updateObjectESP()
     doSilentAim()
     
     if Config.SilentAim.Enabled and Config.SilentAim.Line then
