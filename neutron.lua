@@ -10,6 +10,17 @@ local LocalPlayer = Players.LocalPlayer
 local IMAGE_URL = "rbxassetid://138823883244540"
 local TG_LINK = "t.me/Neutron016"
 
+-- ============================================================
+-- НАСТРОЙКА ОБЪЕКТОВ ДЛЯ ESP (ЗАМЕНИ НАЗВАНИЯ ПОД СВОЮ ИГРУ)
+-- ============================================================
+local OBJECT_NAMES = {
+    Closet = "Closet",   -- Название объекта шкафа в игре
+    Chest = "Chest",     -- Название объекта сундука
+    Sleeping = "Sleeping", -- Название объекта спящего
+    Dead = "Dead"        -- Название объекта умершего
+}
+-- ============================================================
+
 local SCALE = 1
 local screenResText = "0x0"
 
@@ -30,11 +41,12 @@ local Config = {
     ESP = {
         Enabled = false, Box = false, Name = false, Distance = false,
         Health = false, Tracer = false, Skeleton = false, Head = false,
-        MaxDistance = 1000, VisibleCheck = false
+        MaxDistance = 1000, VisibleCheck = false,
+        Closet = false, Chest = false, Sleeping = false, Dead = false
     },
-    Aimbot = {
+    SilentAim = {
         Enabled = false, Smoothness = 8, FOV = 60,
-        AimVisibleCheck = false,
+        SilentAimVisibleCheck = false,
         TargetPart = "Torso",
         ReactionDelay = 0.15, AimJitter = 0.008,
         MaxAimDistance = 1000,
@@ -43,6 +55,7 @@ local Config = {
 }
 
 local ESPObjects = {}
+local ObjectESP = {}
 local FOVCircle = nil
 local Open = true
 local CompletelyClosed = false
@@ -233,111 +246,137 @@ local function updateESP()
         
         local targetColor = Color3.fromRGB(255, 255, 255) 
         if Config.ESP.VisibleCheck then
-            if isVisible(c) then
-                targetColor = Color3.fromRGB(0, 255, 0)
-            else
-                targetColor = Color3.fromRGB(255, 0, 0)
-            end
+            if isVisible(c) then targetColor = Color3.fromRGB(0, 255, 0) else targetColor = Color3.fromRGB(255, 0, 0) end
         end
         
         if f then
             local t = f.top
             local b = f.bottom
-            
             o.Box.Color = targetColor
             o.Tracer.Color = targetColor
             o.HeadCircle.Color = targetColor
             for _, l in pairs(o.SkeletonLines) do l.Color = targetColor end
             
-            if Config.ESP.Box then
-                o.Box.Size = Vector2.new(b.X - t.X, b.Y - t.Y)
-                o.Box.Position = t
-                o.Box.Visible = true
-            else o.Box.Visible = false end
-            
-            if Config.ESP.Name then
-                o.Name.Text = p.Name
-                o.Name.Position = Vector2.new(f.centerX, t.Y - 20*SCALE)
-                o.Name.Visible = true
-            else o.Name.Visible = false end
-            
-            if Config.ESP.Distance then
-                o.Distance.Text = string.format("[%d m]", math.floor(dist))
-                o.Distance.Position = Vector2.new(f.centerX, b.Y + 2*SCALE)
-                o.Distance.Visible = true
-            else o.Distance.Visible = false end
+            if Config.ESP.Box then o.Box.Size = Vector2.new(b.X - t.X, b.Y - t.Y); o.Box.Position = t; o.Box.Visible = true else o.Box.Visible = false end
+            if Config.ESP.Name then o.Name.Text = p.Name; o.Name.Position = Vector2.new(f.centerX, t.Y - 20*SCALE); o.Name.Visible = true else o.Name.Visible = false end
+            if Config.ESP.Distance then o.Distance.Text = string.format("[%d m]", math.floor(dist)); o.Distance.Position = Vector2.new(f.centerX, b.Y + 2*SCALE); o.Distance.Visible = true else o.Distance.Visible = false end
             
             if Config.ESP.Health then
                 local pc = math.clamp(hum.Health / math.max(hum.MaxHealth, 1), 0, 1)
                 local bh = b.Y - t.Y
                 local off = 6*SCALE
-                o.HealthBG.From = Vector2.new(t.X - off, t.Y)
-                o.HealthBG.To = Vector2.new(t.X - off, b.Y)
-                o.HealthBG.Visible = true
-                o.HealthBar.From = Vector2.new(t.X - off, b.Y - bh * pc)
-                o.HealthBar.To = Vector2.new(t.X - off, b.Y)
-                
-                if Config.ESP.VisibleCheck then
-                    local hue = pc * 0.33 
-                    o.HealthBar.Color = Color3.fromHSV(hue, 1, 1)
-                else
-                    o.HealthBar.Color = Color3.fromRGB(255, 255, 255)
-                end
-                
+                o.HealthBG.From = Vector2.new(t.X - off, t.Y); o.HealthBG.To = Vector2.new(t.X - off, b.Y); o.HealthBG.Visible = true
+                o.HealthBar.From = Vector2.new(t.X - off, b.Y - bh * pc); o.HealthBar.To = Vector2.new(t.X - off, b.Y)
+                o.HealthBar.Color = Config.ESP.VisibleCheck and Color3.fromHSV(pc * 0.33, 1, 1) or Color3.fromRGB(255, 255, 255)
                 o.HealthBar.Visible = true
-            else
-                o.HealthBar.Visible = false
-                o.HealthBG.Visible = false
-            end
+            else o.HealthBar.Visible = false; o.HealthBG.Visible = false end
             
-            if Config.ESP.Tracer then
-                o.Tracer.From = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y)
-                o.Tracer.To = Vector2.new(f.centerX, b.Y)
-                o.Tracer.Visible = true
-            else o.Tracer.Visible = false end
+            if Config.ESP.Tracer then o.Tracer.From = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y); o.Tracer.To = Vector2.new(f.centerX, b.Y); o.Tracer.Visible = true else o.Tracer.Visible = false end
         else
-            o.Box.Visible = false
-            o.Name.Visible = false
-            o.Distance.Visible = false
-            o.HealthBar.Visible = false
-            o.HealthBG.Visible = false
-            o.Tracer.Visible = false
+            o.Box.Visible = false; o.Name.Visible = false; o.Distance.Visible = false; o.HealthBar.Visible = false; o.HealthBG.Visible = false; o.Tracer.Visible = false
         end
         
         if Config.ESP.Skeleton and isR15(c) then
             for i, bone in ipairs(SKELETON_BONES) do
-                local a = c:FindFirstChild(bone[1])
-                local b = c:FindFirstChild(bone[2])
-                local line = o.SkeletonLines[i]
+                local a = c:FindFirstChild(bone[1]); local b = c:FindFirstChild(bone[2]); local line = o.SkeletonLines[i]
                 if a and b then
-                    local pa = w2s(a.Position)
-                    local pb = w2s(b.Position)
-                    if pa and pb then
-                        line.From = pa
-                        line.To = pb
-                        line.Visible = true
-                    else line.Visible = false end
+                    local pa = w2s(a.Position); local pb = w2s(b.Position)
+                    if pa and pb then line.From = pa; line.To = pb; line.Visible = true else line.Visible = false end
                 else line.Visible = false end
             end
-        else
-            for _, l in pairs(o.SkeletonLines) do l.Visible = false end
-        end
+        else for _, l in pairs(o.SkeletonLines) do l.Visible = false end end
         
         if Config.ESP.Head then
             local hd = c:FindFirstChild("Head")
             if hd then
                 local pt = w2s(hd.Position)
-                if pt and f then
-                    o.HeadCircle.Position = pt
-                    o.HeadCircle.Radius = math.max(f.height * 0.16, 8*SCALE)
-                    o.HeadCircle.Visible = true
-                else o.HeadCircle.Visible = false end
+                if pt and f then o.HeadCircle.Position = pt; o.HeadCircle.Radius = math.max(f.height * 0.16, 8*SCALE); o.HeadCircle.Visible = true else o.HeadCircle.Visible = false end
             else o.HeadCircle.Visible = false end
         else o.HeadCircle.Visible = false end
     end
 end
 
-local function getClosestTargetForAim()
+local function updateObjectESP()
+    for name, obj in pairs(ObjectESP) do
+        if not obj.Enabled or not obj.Instance or not obj.Instance.Parent then
+            if obj.Box then obj.Box:Remove() end
+            if obj.Text then obj.Text:Remove() end
+            ObjectESP[name] = nil
+        else
+            local instance = obj.Instance
+            local pos = nil
+            if instance:IsA("Model") then
+                pos = instance:FindFirstChild("HumanoidRootPart") and instance.HumanoidRootPart.Position or (instance.PrimaryPart and instance.PrimaryPart.Position)
+            elseif instance:IsA("BasePart") then
+                pos = instance.Position
+            end
+
+            if pos then
+                local sp, onScreen = Camera:WorldToViewportPoint(pos)
+                if onScreen then
+                    local dist = (Camera.CFrame.Position - pos).Magnitude
+                    if dist <= Config.ESP.MaxDistance then
+                        local text = string.format("%s [%d m]", name, math.floor(dist))
+                        obj.Text.Text = text
+                        obj.Text.Position = Vector2.new(sp.X, sp.Y - 20)
+                        obj.Text.Visible = true
+                        
+                        obj.Box.Size = Vector2.new(40, 40)
+                        obj.Box.Position = Vector2.new(sp.X - 20, sp.Y - 20)
+                        obj.Box.Visible = true
+                    else
+                        obj.Text.Visible = false
+                        obj.Box.Visible = false
+                    end
+                else
+                    obj.Text.Visible = false
+                    obj.Box.Visible = false
+                end
+            end
+        end
+    end
+end
+
+local function toggleObjectESP(name, enabled)
+    if enabled then
+        if not ObjectESP[name] then
+            ObjectESP[name] = {
+                Box = Drawing.new("Square"),
+                Text = Drawing.new("Text"),
+                Enabled = true,
+                Instance = nil
+            }
+            ObjectESP[name].Box.Thickness = 1
+            ObjectESP[name].Box.Color = Color3.fromRGB(0, 255, 255)
+            ObjectESP[name].Box.Filled = false
+            ObjectESP[name].Text.Size = 14
+            ObjectESP[name].Text.Center = true
+            ObjectESP[name].Text.Outline = true
+            ObjectESP[name].Text.Color = Color3.fromRGB(0, 255, 255)
+        else
+            ObjectESP[name].Enabled = true
+        end
+        
+        task.spawn(function()
+            while ObjectESP[name] and ObjectESP[name].Enabled do
+                local targetName = OBJECT_NAMES[name]
+                for _, v in pairs(Workspace:GetDescendants()) do
+                    if v.Name == targetName then
+                        ObjectESP[name].Instance = v
+                        break
+                    end
+                end
+                task.wait(1)
+            end
+        end)
+    else
+        if ObjectESP[name] then
+            ObjectESP[name].Enabled = false
+        end
+    end
+end
+
+local function getClosestTargetForSilentAim()
     local closest, sDist = nil, math.huge
     local cn = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
     for _, p in pairs(Players:GetPlayers()) do
@@ -346,27 +385,18 @@ local function getClosestTargetForAim()
         if not c then continue end
         local hum = c:FindFirstChildOfClass("Humanoid")
         if not hum or hum.Health <= 0 then continue end
-        
         local root = c:FindFirstChild("HumanoidRootPart")
         if root then
             local dist = (Camera.CFrame.Position - root.Position).Magnitude
-            if dist > Config.Aimbot.MaxAimDistance then continue end
+            if dist > Config.SilentAim.MaxAimDistance then continue end
         end
-
-        local part = resolveTargetPart(c, Config.Aimbot.TargetPart)
+        local part = resolveTargetPart(c, Config.SilentAim.TargetPart)
         if not part then continue end
-        
-        if Config.Aimbot.AimVisibleCheck and not isVisible(c) then continue end
-        
+        if Config.SilentAim.SilentAimVisibleCheck and not isVisible(c) then continue end
         local sp, on = Camera:WorldToViewportPoint(part.Position)
         if not on then continue end
-        
         local d = (Vector2.new(sp.X, sp.Y) - cn).Magnitude
-        
-        if d < sDist and d <= Config.Aimbot.FOV then 
-            sDist = d
-            closest = part 
-        end
+        if d < sDist and d <= Config.SilentAim.FOV then sDist = d; closest = part end
     end
     return closest
 end
@@ -380,38 +410,28 @@ local function getClosestTargetForLine()
         if not c then continue end
         local hum = c:FindFirstChildOfClass("Humanoid")
         if not hum or hum.Health <= 0 then continue end
-        
         local root = c:FindFirstChild("HumanoidRootPart")
         if root then
             local dist = (Camera.CFrame.Position - root.Position).Magnitude
-            if dist > Config.Aimbot.MaxAimDistance then continue end
+            if dist > Config.SilentAim.MaxAimDistance then continue end
         end
-
-        local part = resolveTargetPart(c, Config.Aimbot.TargetPart)
+        local part = resolveTargetPart(c, Config.SilentAim.TargetPart)
         if not part then continue end
-        
         local sp, on = Camera:WorldToViewportPoint(part.Position)
         if not on then continue end
-        
         local d = (Vector2.new(sp.X, sp.Y) - cn).Magnitude
-        
-        if d < sDist and d <= Config.Aimbot.FOV then 
-            sDist = d
-            closest = part 
-        end
+        if d < sDist and d <= Config.SilentAim.FOV then sDist = d; closest = part end
     end
     return closest
 end
 
-local function doAimbot()
-    if not Config.Aimbot.Enabled then return end
-    if aiming and os.clock() - aimStartTime < Config.Aimbot.ReactionDelay then return end
-    
-    local t = getClosestTargetForAim()
+local function doSilentAim()
+    if not Config.SilentAim.Enabled then return end
+    if aiming and os.clock() - aimStartTime < Config.SilentAim.ReactionDelay then return end
+    local t = getClosestTargetForSilentAim()
     if not t then return end
-    
-    local la = math.clamp(0.825 - (Config.Aimbot.Smoothness * 0.075), 0.05, 1)
-    local jit = Config.Aimbot.AimJitter
+    local la = math.clamp(0.825 - (Config.SilentAim.Smoothness * 0.075), 0.05, 1)
+    local jit = Config.SilentAim.AimJitter
     local tp = t.Position + Vector3.new((math.random()-0.5)*jit, (math.random()-0.5)*jit, (math.random()-0.5)*jit)
     Camera.CFrame = Camera.CFrame:Lerp(CFrame.new(Camera.CFrame.Position, tp), la)
 end
@@ -421,7 +441,7 @@ local function createFOVCircle()
     FOVCircle = Drawing.new("Circle")
     FOVCircle.Thickness = math.max(1, 1.5*SCALE)
     FOVCircle.NumSides = 60
-    FOVCircle.Radius = Config.Aimbot.FOV
+    FOVCircle.Radius = Config.SilentAim.FOV
     FOVCircle.Filled = false
     FOVCircle.Color = Color3.fromRGB(255,255,255) 
     FOVCircle.Transparency = 0.8
@@ -430,7 +450,7 @@ end
 createFOVCircle()
 
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "Neutron"
+ScreenGui.Name = "Neutron Decay"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.IgnoreGuiInset = true
 ScreenGui.DisplayOrder = 999
@@ -513,7 +533,7 @@ local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, -160, 1, 0)
 Title.Position = UDim2.new(0, 42, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "NEUTRON"
+Title.Text = "NEUTRON DECAY"
 Title.TextColor3 = CLR_ACCENT
 Title.TextSize = 15
 Title.Font = Enum.Font.GothamBold
@@ -674,23 +694,17 @@ local function makeTab(name)
 end
 
 local Visual = makeTab("ESP")
-local Combat = makeTab("AIM")
+local Combat = makeTab("SILENT")
 local Misc = makeTab("MISC")
 local allTabs = {Visual, Combat, Misc}
 
 local function selectTab(tab)
     for _, t in pairs(allTabs) do
         t.Page.Visible = false
-        TweenService:Create(t.Button, TweenInfo.new(0.15), {
-            BackgroundColor3 = CLR_ELEM,
-            TextColor3 = CLR_TEXT_DARK,
-        }):Play()
+        TweenService:Create(t.Button, TweenInfo.new(0.15), { BackgroundColor3 = CLR_ELEM, TextColor3 = CLR_TEXT_DARK }):Play()
     end
     tab.Page.Visible = true
-    TweenService:Create(tab.Button, TweenInfo.new(0.15), {
-        BackgroundColor3 = CLR_TOGGLE_ON,
-        TextColor3 = CLR_BG,
-    }):Play()
+    TweenService:Create(tab.Button, TweenInfo.new(0.15), { BackgroundColor3 = CLR_TOGGLE_ON, TextColor3 = CLR_BG }):Play()
 end
 
 Visual.Button.MouseButton1Click:Connect(function() selectTab(Visual) end)
@@ -741,16 +755,10 @@ local function addToggle(parent, text, default, callback)
     local function refresh()
         if state then
             TweenService:Create(toggle, TweenInfo.new(0.15), { BackgroundColor3 = CLR_TOGGLE_ON }):Play()
-            TweenService:Create(knob, TweenInfo.new(0.15), {
-                Position = UDim2.new(1, -18, 0.5, -8),
-                BackgroundColor3 = CLR_BG,
-            }):Play()
+            TweenService:Create(knob, TweenInfo.new(0.15), { Position = UDim2.new(1, -18, 0.5, -8), BackgroundColor3 = CLR_BG }):Play()
         else
             TweenService:Create(toggle, TweenInfo.new(0.15), { BackgroundColor3 = CLR_TOGGLE_OFF }):Play()
-            TweenService:Create(knob, TweenInfo.new(0.15), {
-                Position = UDim2.new(0, 2, 0.5, -8),
-                BackgroundColor3 = CLR_TEXT,
-            }):Play()
+            TweenService:Create(knob, TweenInfo.new(0.15), { Position = UDim2.new(0, 2, 0.5, -8), BackgroundColor3 = CLR_TEXT }):Play()
         end
     end
     refresh()
@@ -816,16 +824,13 @@ local function addSlider(parent, text, max, min, default, callback)
         if callback then callback(cur) end
     end
     bar.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1
-        or input.UserInputType == Enum.UserInputType.Touch then drag = true; upd(input) end
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then drag = true; upd(input) end
     end)
     UserInputService.InputChanged:Connect(function(input)
-        if drag and (input.UserInputType == Enum.UserInputType.MouseMovement
-        or input.UserInputType == Enum.UserInputType.Touch) then upd(input) end
+        if drag and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then upd(input) end
     end)
     UserInputService.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1
-        or input.UserInputType == Enum.UserInputType.Touch then drag = false end
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then drag = false end
     end)
 end
 
@@ -879,30 +884,108 @@ local function addDropdown(parent, text, options, callback)
     end
 end
 
-addToggle(Visual.Page, "ESP Enabled", false, function(s) Config.ESP.Enabled = s end)
-addToggle(Visual.Page, "Visible Check", false, function(s) Config.ESP.VisibleCheck = s end)
-addToggle(Visual.Page, "Box", false, function(s) Config.ESP.Box = s end)
-addToggle(Visual.Page, "Name", false, function(s) Config.ESP.Name = s end)
-addToggle(Visual.Page, "Health Bar", false, function(s) Config.ESP.Health = s end)
-addToggle(Visual.Page, "Tracer", false, function(s) Config.ESP.Tracer = s end)
-addToggle(Visual.Page, "Skeleton", false, function(s) Config.ESP.Skeleton = s end)
-addToggle(Visual.Page, "Head Circle", false, function(s) Config.ESP.Head = s end)
-addToggle(Visual.Page, "Show Distance", false, function(s) Config.ESP.Distance = s end)
-addSlider(Visual.Page, "ESP Distance", 2000, 0, 1000, function(v) Config.ESP.MaxDistance = v end)
+-- === ПОДВКЛАДКИ В ESP (Players / Other) ===
+local SubTabsFrame = Instance.new("Frame")
+SubTabsFrame.Size = UDim2.new(1, 0, 0, 30)
+SubTabsFrame.BackgroundTransparency = 1
+SubTabsFrame.Parent = Visual.Page
+SubTabsFrame.LayoutOrder = -1
 
-addToggle(Combat.Page, "Aimbot Enabled", false, function(s)
-    Config.Aimbot.Enabled = s
+local SubPlayersBtn = Instance.new("TextButton")
+SubPlayersBtn.Size = UDim2.new(0.5, -2, 1, 0)
+SubPlayersBtn.Position = UDim2.new(0, 0, 0, 0)
+SubPlayersBtn.BackgroundColor3 = CLR_TOGGLE_ON
+SubPlayersBtn.BorderSizePixel = 0
+SubPlayersBtn.Text = "Players"
+SubPlayersBtn.TextColor3 = CLR_BG
+SubPlayersBtn.Font = Enum.Font.GothamBold
+SubPlayersBtn.TextSize = 12
+SubPlayersBtn.Parent = SubTabsFrame
+local spc = Instance.new("UICorner")
+spc.CornerRadius = UDim.new(0,6)
+spc.Parent = SubPlayersBtn
+
+local SubOtherBtn = Instance.new("TextButton")
+SubOtherBtn.Size = UDim2.new(0.5, -2, 1, 0)
+SubOtherBtn.Position = UDim2.new(0.5, 2, 0, 0)
+SubOtherBtn.BackgroundColor3 = CLR_ELEM
+SubOtherBtn.BorderSizePixel = 0
+SubOtherBtn.Text = "Other"
+SubOtherBtn.TextColor3 = CLR_TEXT_DARK
+SubOtherBtn.Font = Enum.Font.GothamBold
+SubOtherBtn.TextSize = 12
+SubOtherBtn.Parent = SubTabsFrame
+local soc = Instance.new("UICorner")
+soc.CornerRadius = UDim.new(0,6)
+soc.Parent = SubOtherBtn
+
+local PagePlayers = Instance.new("Frame")
+PagePlayers.Size = UDim2.new(1, 0, 1, -35)
+PagePlayers.Position = UDim2.new(0, 0, 0, 35)
+PagePlayers.BackgroundTransparency = 1
+PagePlayers.Parent = Visual.Page
+local pplLayout = Instance.new("UIListLayout")
+pplLayout.Padding = UDim.new(0, 5)
+pplLayout.SortOrder = Enum.SortOrder.LayoutOrder
+pplLayout.Parent = PagePlayers
+
+local PageOther = Instance.new("Frame")
+PageOther.Size = UDim2.new(1, 0, 1, -35)
+PageOther.Position = UDim2.new(0, 0, 0, 35)
+PageOther.BackgroundTransparency = 1
+PageOther.Visible = false
+PageOther.Parent = Visual.Page
+local othLayout = Instance.new("UIListLayout")
+othLayout.Padding = UDim.new(0, 5)
+othLayout.SortOrder = Enum.SortOrder.LayoutOrder
+othLayout.Parent = PageOther
+
+SubPlayersBtn.MouseButton1Click:Connect(function()
+    PagePlayers.Visible = true
+    PageOther.Visible = false
+    TweenService:Create(SubPlayersBtn, TweenInfo.new(0.15), {BackgroundColor3 = CLR_TOGGLE_ON, TextColor3 = CLR_BG}):Play()
+    TweenService:Create(SubOtherBtn, TweenInfo.new(0.15), {BackgroundColor3 = CLR_ELEM, TextColor3 = CLR_TEXT_DARK}):Play()
+end)
+
+SubOtherBtn.MouseButton1Click:Connect(function()
+    PagePlayers.Visible = false
+    PageOther.Visible = true
+    TweenService:Create(SubOtherBtn, TweenInfo.new(0.15), {BackgroundColor3 = CLR_TOGGLE_ON, TextColor3 = CLR_BG}):Play()
+    TweenService:Create(SubPlayersBtn, TweenInfo.new(0.15), {BackgroundColor3 = CLR_ELEM, TextColor3 = CLR_TEXT_DARK}):Play()
+end)
+
+-- ESP Настройки (Players)
+addToggle(PagePlayers, "ESP Enabled", false, function(s) Config.ESP.Enabled = s end)
+addToggle(PagePlayers, "Visible Check", false, function(s) Config.ESP.VisibleCheck = s end)
+addToggle(PagePlayers, "Box", false, function(s) Config.ESP.Box = s end)
+addToggle(PagePlayers, "Name", false, function(s) Config.ESP.Name = s end)
+addToggle(PagePlayers, "Health Bar", false, function(s) Config.ESP.Health = s end)
+addToggle(PagePlayers, "Tracer", false, function(s) Config.ESP.Tracer = s end)
+addToggle(PagePlayers, "Skeleton", false, function(s) Config.ESP.Skeleton = s end)
+addToggle(PagePlayers, "Head Circle", false, function(s) Config.ESP.Head = s end)
+addToggle(PagePlayers, "Show Distance", false, function(s) Config.ESP.Distance = s end)
+addSlider(PagePlayers, "ESP Distance", 2000, 0, 1000, function(v) Config.ESP.MaxDistance = v end)
+
+-- ESP Настройки (Other)
+addToggle(PageOther, "ESP Closet", false, function(s) Config.ESP.Closet = s; toggleObjectESP("Closet", s) end)
+addToggle(PageOther, "ESP Chest", false, function(s) Config.ESP.Chest = s; toggleObjectESP("Chest", s) end)
+addToggle(PageOther, "ESP Sleeping", false, function(s) Config.ESP.Sleeping = s; toggleObjectESP("Sleeping", s) end)
+addToggle(PageOther, "ESP Dead", false, function(s) Config.ESP.Dead = s; toggleObjectESP("Dead", s) end)
+
+-- SILENT AIM Настройки
+addToggle(Combat.Page, "Silent Aim Enabled", false, function(s)
+    Config.SilentAim.Enabled = s
     if FOVCircle then FOVCircle.Visible = s end
 end)
-addToggle(Combat.Page, "Visible Check", false, function(s) Config.Aimbot.AimVisibleCheck = s end)
-addToggle(Combat.Page, "Draw Line", false, function(s) Config.Aimbot.Line = s end)
-addSlider(Combat.Page, "Smoothness", 10, 1, 8, function(v) Config.Aimbot.Smoothness = v end)
+addToggle(Combat.Page, "Visible Check", false, function(s) Config.SilentAim.SilentAimVisibleCheck = s end)
+addToggle(Combat.Page, "Draw Line", false, function(s) Config.SilentAim.Line = s end)
+addSlider(Combat.Page, "Smoothness", 10, 1, 8, function(v) Config.SilentAim.Smoothness = v end)
 addSlider(Combat.Page, "FOV", 200, 30, 60, function(v)
-    Config.Aimbot.FOV = v
+    Config.SilentAim.FOV = v
     if FOVCircle then FOVCircle.Radius = v end
 end)
-addSlider(Combat.Page, "Aim Distance", 2000, 0, 1000, function(v) Config.Aimbot.MaxAimDistance = v end)
-addDropdown(Combat.Page, "Target", {"Torso", "Head"}, function(v) Config.Aimbot.TargetPart = v end)
+addSlider(Combat.Page, "Aim Distance", 2000, 0, 1000, function(v) Config.SilentAim.MaxAimDistance = v end)
+addDropdown(Combat.Page, "Target", {"Torso", "Head"}, function(v) Config.SilentAim.TargetPart = v end)
 
 local TgHolder = Instance.new("Frame")
 TgHolder.Size = UDim2.new(1, 0, 0, 96)
@@ -1149,7 +1232,7 @@ local function fullyClose()
         Main.Visible = false
         if ToggleBtn then ToggleBtn.Visible = false end
         Config.ESP.Enabled = false
-        Config.Aimbot.Enabled = false
+        Config.SilentAim.Enabled = false
         if FOVCircle then FOVCircle.Visible = false end
         for _, obj in pairs(ESPObjects) do hideAll(obj) end
     end)
@@ -1178,43 +1261,29 @@ Players.PlayerRemoving:Connect(removeESP)
 RunService.RenderStepped:Connect(function()
     if CompletelyClosed then return end
     updateESP()
-    doAimbot()
+    updateObjectESP()
+    doSilentAim()
     
-    -- ЛИНИЯ АИМБОТА
-    if Config.Aimbot.Enabled and Config.Aimbot.Line then
+    if Config.SilentAim.Enabled and Config.SilentAim.Line then
         local lineTarget = getClosestTargetForLine()
         if lineTarget then
             local screenCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
             local targetPos, onScreen = Camera:WorldToViewportPoint(lineTarget.Position)
-            
             if onScreen then
-                local drawLine = false
                 local lineColor = Color3.fromRGB(255, 255, 255)
-                
                 if Config.ESP.VisibleCheck then
                     local char = lineTarget.Parent
                     if char and char:FindFirstChildOfClass("Humanoid") then
-                        if isVisible(char) then
-                            drawLine = true
-                            lineColor = Color3.fromRGB(0, 255, 0) -- Зеленый (виден)
-                        else
-                            drawLine = false -- НЕ РИСУЕМ, если за стеной
-                        end
+                        lineColor = isVisible(char) and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)
                     end
-                else
-                    drawLine = true -- Рисуем всегда, если Visible Check выключен
-                    lineColor = Color3.fromRGB(255, 255, 255) -- Белый
                 end
-                
-                if drawLine then
-                    local l = Drawing.new("Line")
-                    l.Thickness = 1
-                    l.Color = lineColor
-                    l.From = screenCenter
-                    l.To = Vector2.new(targetPos.X, targetPos.Y)
-                    l.Visible = true
-                    task.delay(0.05, function() l:Remove() end)
-                end
+                local l = Drawing.new("Line")
+                l.Thickness = 1
+                l.Color = lineColor
+                l.From = screenCenter
+                l.To = Vector2.new(targetPos.X, targetPos.Y)
+                l.Visible = true
+                task.delay(0.05, function() l:Remove() end)
             end
         end
     end
@@ -1226,12 +1295,12 @@ RunService.RenderStepped:Connect(function()
             local screenCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
             for _, p in pairs(Players:GetPlayers()) do
                 if p ~= LocalPlayer and p.Character then
-                    local part = resolveTargetPart(p.Character, Config.Aimbot.TargetPart)
+                    local part = resolveTargetPart(p.Character, Config.SilentAim.TargetPart)
                     if part then
                         local sp, onScreen = Camera:WorldToViewportPoint(part.Position)
                         if onScreen then
                             local dist = (Vector2.new(sp.X, sp.Y) - screenCenter).Magnitude
-                            if dist <= Config.Aimbot.FOV then
+                            if dist <= Config.SilentAim.FOV then
                                 if isVisible(p.Character) then hasVisibleTarget = true; break end
                             end
                         end
@@ -1245,4 +1314,4 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
-print("NEUTRON loaded!")
+print("NEUTRON DECAY loaded!")
